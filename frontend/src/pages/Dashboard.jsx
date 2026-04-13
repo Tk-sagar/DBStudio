@@ -10,10 +10,12 @@ const STORAGE_KEY_TABLE = 'db_selectedTable';
 const STORAGE_KEY_VIEW  = 'db_activeView';
 
 export default function Dashboard({ dbInfo, dbPermission, initialTables, user, onDisconnect, onLogout, onAdmin }) {
+  // typeof window guard: sessionStorage doesn't exist in Node.js during SSR
   const [selectedTable, setSelectedTable] = useState(
-    () => sessionStorage.getItem(STORAGE_KEY_TABLE) || null
+    () => typeof window !== 'undefined' ? (sessionStorage.getItem(STORAGE_KEY_TABLE) || null) : null
   );
   const [activeView, setActiveView] = useState(() => {
+    if (typeof window === 'undefined') return null;
     const saved = sessionStorage.getItem(STORAGE_KEY_VIEW);
     if (saved === 'sql' && dbPermission !== 'full') return null;
     return saved || (dbPermission === 'full' ? 'sql' : null);

@@ -13,23 +13,24 @@ function Spinner() {
   );
 }
 
-export default function App() {
-  const [loading,      setLoading]      = useState(true);
-  const [needsSetup,   setNeedsSetup]   = useState(false);
-  const [user,         setUser]         = useState(null);
-  const [dbConnected,  setDbConnected]  = useState(false);
-  const [dbInfo,       setDbInfo]       = useState(null);
-  const [dbPermission, setDbPermission] = useState(null);
-  const [tables,       setTables]       = useState([]);
+export default function App({ initialData }) {
+  // When initialData is provided by SSR, skip the bootstrap API calls entirely
+  const [loading,      setLoading]      = useState(!initialData);
+  const [needsSetup,   setNeedsSetup]   = useState(initialData?.needsSetup   ?? false);
+  const [user,         setUser]         = useState(initialData?.user         ?? null);
+  const [dbConnected,  setDbConnected]  = useState(initialData?.dbConnected  ?? false);
+  const [dbInfo,       setDbInfo]       = useState(initialData?.dbInfo       ?? null);
+  const [dbPermission, setDbPermission] = useState(initialData?.dbPermission ?? null);
+  const [tables,       setTables]       = useState(initialData?.tables       ?? []);
   const [showAdmin,    setShowAdmin]    = useState(false);
 
   useEffect(() => {
+    // SSR already resolved the session state — no bootstrap calls needed
+    if (initialData) return;
+
     api.get('/auth/setup-required')
       .then(res => {
-        if (res.data.required) {
-          setNeedsSetup(true);
-          return null;
-        }
+        if (res.data.required) { setNeedsSetup(true); return null; }
         return api.get('/auth/me');
       })
       .then(res => {

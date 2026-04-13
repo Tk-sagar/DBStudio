@@ -4,6 +4,7 @@ import SavedConnections from './SavedConnections.jsx';
 
 const STORAGE_KEY = 'dbadmin_connections';
 function loadConnections() {
+  if (typeof localStorage === 'undefined') return [];
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
 }
