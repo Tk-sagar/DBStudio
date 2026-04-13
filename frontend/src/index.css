@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+:root {
+  --bg:          #09090b;
+  --surface:     #0f0f12;
+  --raised:      #18181b;
+  --overlay:     #212125;
+  --border:      rgba(255,255,255,0.07);
+  --border-md:   rgba(255,255,255,0.11);
+  --text:        #f0f0f1;
+  --text-2:      #98989f;
+  --text-3:      #4a4a55;
+  --violet:      #7c3aed;
+  --violet-soft: rgba(124,58,237,0.14);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  /* Inter with optical sizing enabled */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-optical-sizing: auto;
+  font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 4px; height: 4px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: rgba(255,255,255,0.09); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover  { background: rgba(255,255,255,0.16); }
+::-webkit-scrollbar-corner       { background: transparent; }
+.cm-scroller::-webkit-scrollbar        { width: 4px; height: 4px; }
+.cm-scroller::-webkit-scrollbar-track  { background: transparent; }
+.cm-scroller::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.09); border-radius: 99px; }
+
+/* ── Select options ──────────────────────────────────────────────────────── */
+select option { background: #18181b; color: #f0f0f1; }
+
+/* ── Focus ring ──────────────────────────────────────────────────────────── */
+:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+
+/* ── Gradient text ───────────────────────────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Subtle dot grid for page backgrounds ────────────────────────────────── */
+.dot-grid {
+  background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* ── Card top accent bar ─────────────────────────────────────────────────── */
+.card-accent::before {
+  content: '';
+  position: absolute;
+  inset-x: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(124,58,237,0.6) 50%, transparent 100%);
+  border-radius: 16px 16px 0 0;
+}
