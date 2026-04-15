@@ -16,7 +16,8 @@ const queryRouter   = require('./routes/query');
 const rowsRouter    = require('./routes/rows');
 const authRouter    = require('./routes/auth');
 const adminRouter   = require('./routes/admin');
-const myConnsRouter = require('./routes/userConnections');
+const myConnsRouter    = require('./routes/userConnections');
+const savedQueriesRouter = require('./routes/savedQueries');
 
 const IS_PROD       = process.env.NODE_ENV === 'production';
 const PORT          = process.env.PORT || 5001;
@@ -151,6 +152,7 @@ async function main() {
   app.use('/api', tablesRouter);
   app.use('/api', queryRouter);
   app.use('/api', rowsRouter);
+  app.use('/api', savedQueriesRouter);
 
   // Health check — no internal details
   app.get('/health', (_req, res) => res.json({ ok: true }));

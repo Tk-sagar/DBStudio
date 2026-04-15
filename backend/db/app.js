@@ -32,11 +32,25 @@ const connectionGrantSchema = new mongoose.Schema({
 });
 connectionGrantSchema.index({ connection_id: 1, user_id: 1 }, { unique: true });
 
+const savedQuerySchema = new mongoose.Schema({
+  name:        { type: String, required: true, maxlength: 100 },
+  description: { type: String, default: '',    maxlength: 500 },
+  sql:         { type: String, required: true },
+  created_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  created_at:  { type: Date, default: Date.now },
+  updated_at:  { type: Date, default: Date.now },
+  is_public:   { type: Boolean, default: false },
+  shared_with: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+});
+savedQuerySchema.index({ created_by: 1 });
+savedQuerySchema.index({ shared_with: 1 });
+
 // ── Models ────────────────────────────────────────────────────────────────────
 
 const User            = mongoose.model('User',            userSchema);
 const SavedConnection = mongoose.model('SavedConnection', savedConnectionSchema);
 const ConnectionGrant = mongoose.model('ConnectionGrant', connectionGrantSchema);
+const SavedQuery      = mongoose.model('SavedQuery',      savedQuerySchema);
 
 // ── Connect ───────────────────────────────────────────────────────────────────
 
@@ -47,4 +61,4 @@ async function connect() {
   console.log('Connected to MongoDB');
 }
 
-module.exports = { connect, User, SavedConnection, ConnectionGrant };
+module.exports = { connect, User, SavedConnection, ConnectionGrant, SavedQuery };

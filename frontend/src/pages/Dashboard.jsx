@@ -67,7 +67,7 @@ export default function Dashboard({ dbInfo, dbPermission, initialTables, user, o
                 <span className="w-5 h-5 border-2 border-white/10 border-t-violet-500 rounded-full animate-spin-fast" />
               </div>
             }>
-              <SqlEditor />
+              <SqlEditor user={user} />
             </Suspense>
           )}
 
