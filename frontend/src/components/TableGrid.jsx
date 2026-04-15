@@ -6,6 +6,104 @@ import {
 } from '@tanstack/react-table';
 import api from '../api/client.js';
 
+// ── SQL builder (display + save) ──────────────────────────────────────────────
+const OP_SQL = {
+  eq:          (c, v) => `${c} = '${v}'`,
+  neq:         (c, v) => `${c} != '${v}'`,
+  gt:          (c, v) => `${c} > '${v}'`,
+  gte:         (c, v) => `${c} >= '${v}'`,
+  lt:          (c, v) => `${c} < '${v}'`,
+  lte:         (c, v) => `${c} <= '${v}'`,
+  contains:    (c, v) => `${c} LIKE '%${v}%'`,
+  starts:      (c, v) => `${c} LIKE '${v}%'`,
+  ends:        (c, v) => `${c} LIKE '%${v}'`,
+  is_null:     (c)    => `${c} IS NULL`,
+  is_not_null: (c)    => `${c} IS NOT NULL`,
+};
+
+function buildSql(tableName, { appliedSearch, appliedSearchFields, appliedFilterRules, sorting, columnNames, limit, page }) {
+  const q = (n) => `\`${n}\``;
+  const conditions = [];
+
+  if (appliedSearch) {
+    const fields = appliedSearchFields.length > 0 ? appliedSearchFields : columnNames;
+    if (fields.length > 0) {
+      const parts = fields.map(f => `${q(f)} LIKE '%${appliedSearch}%'`);
+      conditions.push(parts.length === 1 ? parts[0] : `(\n    ${parts.join('\n    OR ')}\n  )`);
+    }
+  }
+
+  for (const rule of appliedFilterRules) {
+    if (!rule.field) continue;
+    if (!NO_VALUE_OPS.has(rule.op) && !rule.value) continue;
+    const fn = OP_SQL[rule.op];
+    if (fn) conditions.push(fn(q(rule.field), rule.value));
+  }
+
+  let sql = `SELECT *\nFROM ${q(tableName)}`;
+  if (conditions.length > 0) sql += `\nWHERE ${conditions.join('\n  AND ')}`;
+  if (sorting[0]) sql += `\nORDER BY ${q(sorting[0].id)} ${sorting[0].desc ? 'DESC' : 'ASC'}`;
+  // Saveable version ends here — add pagination only for display
+  const saveable = sql;
+  const offset = (page - 1) * limit;
+  const display = `${sql}\nLIMIT ${limit} OFFSET ${offset}`;
+  return { display, saveable };
+}
+
+// ── Inline save modal ─────────────────────────────────────────────────────────
+function InlineSaveModal({ sql, onClose }) {
+  const [name,   setName]   = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+  const [done,   setDone]   = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Name is required.'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post('/queries', { name: name.trim(), sql });
+      setDone(true);
+      setTimeout(onClose, 1200);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save.');
+      setSaving(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="flex items-center gap-2 text-emerald-400 text-xs px-3 py-2 bg-emerald-500/[0.08] border border-emerald-500/20 rounded-xl">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Query saved!
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <input
+        autoFocus
+        type="text"
+        value={name}
+        onChange={e => { setName(e.target.value); setError(''); }}
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onClose(); }}
+        placeholder="Query name…"
+        maxLength={100}
+        className="bg-[#0d0d10] border border-zinc-700 text-zinc-100 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/15 placeholder-zinc-600 w-52 transition-all"
+      />
+      {error && <span className="text-red-400 text-xs">{error}</span>}
+      <button onClick={handleSave} disabled={saving}
+        className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white rounded-lg font-medium transition-all whitespace-nowrap">
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      <button onClick={onClose}
+        className="text-xs px-2.5 py-1.5 bg-[#1c1c1f] hover:bg-[#232329] border border-zinc-800 text-zinc-500 rounded-lg transition-all">
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 // ── Filter config ─────────────────────────────────────────────────────────────
 const OPERATORS = [
   { value: 'contains',    label: 'contains'      },
@@ -78,6 +176,8 @@ export default function TableGrid({ tableName, dbPermission }) {
 
   const [filterRules, setFilterRules] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [showQuery,   setShowQuery]   = useState(false);
+  const [showSave,    setShowSave]    = useState(false);
 
   const [appliedSearch,       setAppliedSearch]       = useState('');
   const [appliedSearchFields, setAppliedSearchFields] = useState([]);
@@ -105,7 +205,7 @@ export default function TableGrid({ tableName, dbPermission }) {
   useEffect(() => {
     setPage(1); setSorting([]);
     setGlobalSearch(''); setSearchFields([]); setShowFieldPicker(false);
-    setFilterRules([]); setShowFilters(false);
+    setFilterRules([]); setShowFilters(false); setShowQuery(false); setShowSave(false);
     setAppliedSearch(''); setAppliedSearchFields([]); setAppliedFilterRules([]);
     setEditingRowIndex(null); setShowAddForm(false); setActionError('');
   }, [tableName]);
@@ -363,6 +463,21 @@ export default function TableGrid({ tableName, dbPermission }) {
           )}
         </button>
 
+        {/* Query toggle */}
+        <button onClick={() => { setShowQuery(s => !s); setShowSave(false); }}
+          className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-all whitespace-nowrap ${
+            showQuery
+              ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
+              : 'bg-[#0d0d10] border-zinc-800 text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+            <path d="M1.5 4L4.5 7L1.5 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M6 10h4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          Query
+        </button>
+
         {/* Active sort */}
         {sorting[0] && (
           <span className="flex items-center gap-1.5 text-xs text-zinc-500 bg-[#0d0d10] border border-zinc-800 rounded-lg px-2.5 py-1.5">
@@ -444,6 +559,49 @@ export default function TableGrid({ tableName, dbPermission }) {
           </div>
         </div>
       )}
+
+      {/* ── Query panel ── */}
+      {showQuery && (() => {
+        const { display, saveable } = buildSql(tableName, {
+          appliedSearch, appliedSearchFields, appliedFilterRules,
+          sorting, columnNames, limit, page,
+        });
+        return (
+          <div className="bg-[#111113] border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between bg-[#18181b]">
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Current query</span>
+              <div className="flex items-center gap-2">
+                {showSave ? (
+                  <InlineSaveModal sql={saveable} onClose={() => setShowSave(false)} />
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(saveable); }}
+                      className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors flex items-center gap-1"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                        <rect x="3.5" y="1" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
+                        <path d="M1 4v5.5A1.5 1.5 0 002.5 11H8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+                      </svg>
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => setShowSave(true)}
+                      className="text-xs px-2.5 py-1 bg-[#232329] hover:bg-[#2c2c32] border border-zinc-700 text-zinc-300 rounded-lg transition-all font-medium flex items-center gap-1.5"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M5 1v8M1 5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      Save query
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto whitespace-pre leading-relaxed bg-[#0d0d10]">{display}</pre>
+          </div>
+        );
+      })()}
 
       {/* ── Add row form ── */}
       {showAddForm && (

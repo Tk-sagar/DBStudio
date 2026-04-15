@@ -125,6 +125,20 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
+// GET /auth/users — list all usernames (used for query sharing UI)
+router.get('/auth/users', async (req, res) => {
+  if (!req.session.user) return res.status(401).json({ error: 'Authentication required.' });
+  try {
+    const users = await User
+      .find({ _id: { $ne: req.session.user.id } }, 'username')
+      .sort({ username: 1 }).lean();
+    res.json({ users: users.map(u => ({ id: u._id.toString(), username: u.username })) });
+  } catch (err) {
+    console.error('[auth/users]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // POST /auth/logout
 router.post('/auth/logout', async (req, res) => {
   try {
