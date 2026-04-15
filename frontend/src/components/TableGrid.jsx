@@ -6,7 +6,25 @@ import {
 } from '@tanstack/react-table';
 import api from '../api/client.js';
 
-// ── SQL builder (display + save) ──────────────────────────────────────────────
+// ── Filter config (must be before buildSql) ───────────────────────────────────
+const OPERATORS = [
+  { value: 'contains',    label: 'contains'      },
+  { value: 'eq',          label: '='             },
+  { value: 'neq',         label: '≠'             },
+  { value: 'gt',          label: '>'             },
+  { value: 'gte',         label: '≥'             },
+  { value: 'lt',          label: '<'             },
+  { value: 'lte',         label: '≤'             },
+  { value: 'starts',      label: 'starts with'   },
+  { value: 'ends',        label: 'ends with'     },
+  { value: 'is_null',     label: 'is null'       },
+  { value: 'is_not_null', label: 'is not null'   },
+];
+const NO_VALUE_OPS = new Set(['is_null', 'is_not_null']);
+let _ruleId = 0;
+const newRule = (field = '') => ({ id: ++_ruleId, field, op: 'contains', value: '' });
+
+// ── SQL builder ───────────────────────────────────────────────────────────────
 const OP_SQL = {
   eq:          (c, v) => `${c} = '${v}'`,
   neq:         (c, v) => `${c} != '${v}'`,
@@ -103,24 +121,6 @@ function InlineSaveModal({ sql, onClose }) {
     </div>
   );
 }
-
-// ── Filter config ─────────────────────────────────────────────────────────────
-const OPERATORS = [
-  { value: 'contains',    label: 'contains'      },
-  { value: 'eq',          label: '='             },
-  { value: 'neq',         label: '≠'             },
-  { value: 'gt',          label: '>'             },
-  { value: 'gte',         label: '≥'             },
-  { value: 'lt',          label: '<'             },
-  { value: 'lte',         label: '≤'             },
-  { value: 'starts',      label: 'starts with'   },
-  { value: 'ends',        label: 'ends with'     },
-  { value: 'is_null',     label: 'is null'       },
-  { value: 'is_not_null', label: 'is not null'   },
-];
-const NO_VALUE_OPS = new Set(['is_null', 'is_not_null']);
-let _ruleId = 0;
-const newRule = (field = '') => ({ id: ++_ruleId, field, op: 'contains', value: '' });
 
 // ── Pagination helper ─────────────────────────────────────────────────────────
 function getPageItems(page, totalPages) {
