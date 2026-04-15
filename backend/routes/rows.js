@@ -8,7 +8,8 @@ router.get('/table/:name/pk', auth, async (req, res) => {
     const pk = await req.adapter.getPrimaryKey(req.params.name);
     res.json({ pk });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[table/pk GET]', err.message);
+    res.status(500).json({ error: 'Failed to retrieve primary key.' });
   }
 });
 
@@ -17,6 +18,7 @@ router.post('/table/:name/row', auth, requirePerm('write'), async (req, res) => 
     const result = await req.adapter.insertRow(req.params.name, req.body);
     res.status(201).json(result);
   } catch (err) {
+    // Pass through DB constraint errors (duplicate key, FK violation, etc.)
     res.status(400).json({ error: err.message });
   }
 });

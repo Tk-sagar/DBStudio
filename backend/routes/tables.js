@@ -1,13 +1,14 @@
 const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
+const router  = express.Router();
+const auth    = require('../middleware/auth');
 
 router.get('/tables', auth, async (req, res) => {
   try {
     const tables = await req.adapter.getTables();
     res.json({ tables });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[tables GET]', err.message);
+    res.status(500).json({ error: 'Failed to retrieve tables.' });
   }
 });
 
@@ -16,7 +17,8 @@ router.get('/table/:name/structure', auth, async (req, res) => {
     const structure = await req.adapter.getTableStructure(req.params.name);
     res.json({ structure });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[table/structure GET]', err.message);
+    res.status(500).json({ error: 'Failed to retrieve table structure.' });
   }
 });
 
@@ -27,11 +29,9 @@ router.get('/table/:name', auth, async (req, res) => {
     const orderBy  = req.query.orderBy  || null;
     const orderDir = req.query.orderDir === 'DESC' ? 'DESC' : 'ASC';
     const search   = req.query.search   || '';
-    // searchField can be a single string or array of strings
     const searchFields = req.query.searchField
       ? [].concat(req.query.searchField).filter(Boolean)
       : [];
-    // filters is a JSON array of {field, op, value} rules
     let filters = [];
     if (req.query.filters) {
       try { filters = JSON.parse(req.query.filters); } catch {}
@@ -42,7 +42,8 @@ router.get('/table/:name', auth, async (req, res) => {
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Pass through adapter errors (table not found, invalid column, etc.) — user already has DB access
+    res.status(400).json({ error: err.message });
   }
 });
 

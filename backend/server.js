@@ -22,11 +22,16 @@ const IS_PROD       = process.env.NODE_ENV === 'production';
 const PORT          = process.env.PORT || 5001;
 const FRONTEND_ROOT = path.resolve(__dirname, '../frontend');
 
-// ── Production guard ──────────────────────────────────────────────────────────
+// ── Production guards ─────────────────────────────────────────────────────────
 if (IS_PROD) {
   const s = process.env.SESSION_SECRET;
   if (!s || s.length < 32 || s === 'change-this-secret-in-production') {
     console.error('FATAL: SESSION_SECRET must be at least 32 random characters.');
+    process.exit(1);
+  }
+  if (!process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY.length < 64) {
+    console.error('FATAL: ENCRYPTION_KEY must be set to a 64-hex-character (32-byte) value in production.');
+    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
     process.exit(1);
   }
 }
@@ -70,13 +75,18 @@ async function main() {
 
   const app = express();
 
-  // ── Security ──────────────────────────────────────────────────────────────
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // ── Security headers ──────────────────────────────────────────────────────
+  app.use(helmet({
+    contentSecurityPolicy: false,       // managed separately if needed
+    crossOriginEmbedderPolicy: false,   // allow loading assets
+    referrerPolicy: { policy: 'no-referrer' },
+  }));
   app.use(compression());
 
+  // Hide Express fingerprint
+  app.disable('x-powered-by');
+
   // ── CORS ──────────────────────────────────────────────────────────────────
-  // In SSR mode the browser hits the same origin as the API, so CORS is only
-  // needed if you also expose the API to external clients (e.g. mobile apps).
   const allowedOrigins = new Set(
     (process.env.FRONTEND_URL || `http://localhost:${PORT}`)
       .split(',').map(o => o.trim()).filter(Boolean)
@@ -89,22 +99,23 @@ async function main() {
     credentials: true,
   }));
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '512kb' }));
 
   // ── Sessions ──────────────────────────────────────────────────────────────
   app.use(session({
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
+    name: '__s',   // rename from default 'connect.sid' to reduce fingerprinting
     cookie: {
-      secure:   IS_PROD,
+      secure:   IS_PROD && !process.env.ALLOW_HTTP,
       httpOnly: true,
       maxAge:   8 * 60 * 60 * 1000,
       sameSite: 'strict',
     },
   }));
 
-  // ── CSRF ──────────────────────────────────────────────────────────────────
+  // ── CSRF origin check ─────────────────────────────────────────────────────
   app.use((req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     const origin = req.headers.origin;
@@ -113,11 +124,24 @@ async function main() {
   });
 
   // ── Rate limiters ─────────────────────────────────────────────────────────
-  const rl = (max) => rateLimit({ windowMs: 15 * 60 * 1000, max, skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false });
+  const rl = (max, skipSuccess = true) => rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max,
+    skipSuccessfulRequests: skipSuccess,
+    standardHeaders: true,
+    legacyHeaders:   false,
+    handler: (_req, res) => res.status(429).json({ error: 'Too many requests. Please try again later.' }),
+  });
+
+  // Auth endpoints: strict limits (count all attempts, not just failures)
+  app.use('/api/auth/login',    rl(15, false));
+  app.use('/api/auth/setup',    rl(10, false));
+  app.use('/api/auth/register', rl(10, false));
+  // Connection endpoints: moderate limits
   app.use('/api/connect',       rl(20));
-  app.use('/api/auth/login',    rl(20));
-  app.use('/api/auth/setup',    rl(20));
-  app.use('/api/auth/register', rl(20));
+  app.use('/api/my/connections', rl(60));
+  // Admin write operations
+  app.use('/api/admin',         rl(100));
 
   // ── API routes ────────────────────────────────────────────────────────────
   app.use('/api', authRouter);
@@ -127,11 +151,12 @@ async function main() {
   app.use('/api', tablesRouter);
   app.use('/api', queryRouter);
   app.use('/api', rowsRouter);
+
+  // Health check — no internal details
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
   // ── SSR ───────────────────────────────────────────────────────────────────
   if (!IS_PROD) {
-    // ── Development: Vite runs as Express middleware (HMR included) ──────────
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       root:    FRONTEND_ROOT,
@@ -162,7 +187,6 @@ async function main() {
     });
 
   } else {
-    // ── Production: serve pre-built bundles ──────────────────────────────────
     const clientDist  = path.join(FRONTEND_ROOT, 'dist/client');
     const serverEntry = path.join(FRONTEND_ROOT, 'dist/server/entry-server.js');
 
@@ -185,9 +209,14 @@ async function main() {
     });
   }
 
-  // ── Error handler ─────────────────────────────────────────────────────────
-  app.use((err, _req, res, _next) => {
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
+  // ── Global error handler — never leak stack traces or internal details ────
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, _next) => {
+    console.error(`[${req.method} ${req.path}]`, err.message);
+    const status = err.status || 500;
+    // Only pass through safe error messages (403 CORS/CSRF; 429 rate limit)
+    const safe = status === 403 || status === 429;
+    res.status(status).json({ error: safe ? err.message : 'Something went wrong. Please try again.' });
   });
 
   app.listen(PORT, () => {

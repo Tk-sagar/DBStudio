@@ -7,7 +7,6 @@ const requireAdmin   = require('../middleware/requireAdmin');
 
 const ALLOWED_TYPES = new Set(['mysql', 'mariadb', 'postgres', 'postgresql', 'sqlite']);
 
-// All routes below require app-level login
 router.use(requireAppAuth);
 
 // POST /connect — admin-only direct DB connection with user-supplied credentials
@@ -35,15 +34,14 @@ router.post('/connect', requireAdmin, async (req, res) => {
     const tables  = await adapter.getTables();
 
     registry.set(req.session.id, adapter);
-    req.session.dbInfo = { type, database, host: host || 'local', name: database };
+    req.session.dbInfo = { type, database, name: database };
     req.session.dbPermission = 'full';
 
     res.json({ success: true, dbInfo: req.session.dbInfo, dbPermission: 'full', tables });
   } catch (err) {
-    console.error('Connection error:', err.message);
-    const msg = err.message || 'Connection failed.';
-    const isAuthErr = /access denied|password|authentication failed|credentials|login failed|no pg_hba/i.test(msg);
-    res.status(isAuthErr ? 401 : 503).json({ error: msg });
+    // Log full error server-side — never expose host/credentials/internal details to client
+    console.error('[connect]', err.message);
+    res.status(503).json({ error: 'Connection failed. Check your credentials and try again.' });
   }
 });
 
@@ -59,7 +57,8 @@ router.delete('/disconnect', async (req, res) => {
     delete req.session.dbPermission;
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[disconnect]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 

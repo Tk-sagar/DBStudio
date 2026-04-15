@@ -14,9 +14,8 @@ router.get('/my/connections', async (req, res) => {
     const { id: userId, role } = req.session.user;
 
     if (role === 'admin') {
-      // Admin sees all saved connections (always full access)
       const rows = await SavedConnection
-        .find({}, 'name type database_name host created_at')
+        .find({}, 'name type database_name created_at')
         .sort({ created_at: -1 })
         .lean();
       return res.json({
@@ -25,7 +24,6 @@ router.get('/my/connections', async (req, res) => {
           name:          sc.name,
           type:          sc.type,
           database_name: sc.database_name,
-          host:          sc.host,
           created_at:    sc.created_at,
           permission:    'full',
         })),
@@ -41,7 +39,7 @@ router.get('/my/connections', async (req, res) => {
 
     res.json({
       connections: grants
-        .filter(g => g.connection_id) // guard against orphaned grants
+        .filter(g => g.connection_id)
         .map(g => ({
           id:            g.connection_id._id.toString(),
           name:          g.connection_id.name,
@@ -51,7 +49,8 @@ router.get('/my/connections', async (req, res) => {
         })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[my/connections GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -61,7 +60,6 @@ router.post('/my/connections/:id/connect', async (req, res) => {
     const connId = req.params.id;
     const { id: userId, role } = req.session.user;
 
-    // Determine permission
     let permission = 'full';
     if (role !== 'admin') {
       const grant = await ConnectionGrant.findOne({ connection_id: connId, user_id: userId }).lean();
@@ -72,7 +70,6 @@ router.post('/my/connections/:id/connect', async (req, res) => {
     const conn = await SavedConnection.findById(connId).lean();
     if (!conn) return res.status(404).json({ error: 'Connection not found.' });
 
-    // Close any existing DB connection for this session
     const existing = registry.get(req.session.id);
     if (existing) {
       try { await existing.close(); } catch (_) {}
@@ -88,14 +85,12 @@ router.post('/my/connections/:id/connect', async (req, res) => {
       database: conn.database_name,
     });
 
-    const tables = await adapter.getTables(); // verify + warm cache
+    const tables = await adapter.getTables();
     registry.set(req.session.id, adapter);
 
-    // dbInfo never includes credentials — only display-safe fields
     req.session.dbInfo = {
       type:     conn.type,
       database: conn.database_name,
-      host:     conn.host || 'local',
       name:     conn.name,
     };
     req.session.dbPermission = permission;
@@ -107,10 +102,8 @@ router.post('/my/connections/:id/connect', async (req, res) => {
       tables,
     });
   } catch (err) {
-    console.error('Shared connect error:', err.message);
-    const msg = err.message || 'Connection failed.';
-    const isAuth = /access denied|password|authentication|login/i.test(msg);
-    res.status(isAuth ? 401 : 503).json({ error: msg });
+    console.error('[my/connections/connect]', err.message);
+    res.status(503).json({ error: 'Connection failed. Please try again or contact your admin.' });
   }
 });
 

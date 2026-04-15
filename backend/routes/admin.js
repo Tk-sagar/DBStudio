@@ -1,16 +1,20 @@
 const express      = require('express');
 const router       = express.Router();
 const bcrypt       = require('bcryptjs');
+const crypto       = require('crypto');
 const { User, SavedConnection, ConnectionGrant } = require('../db/app');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { createAdapter }    = require('../adapters');
 const requireAdmin = require('../middleware/requireAdmin');
 
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS  = 12;
+const MAX_USERNAME = 50;
+const MAX_PASSWORD = 128;
+const MAX_NAME     = 100;
 
 router.use('/admin', requireAdmin);
 
-// ── Safe connection shape — never include db_password_enc or __v ──────────────
+// ── Safe connection shape — only display-safe fields, never credentials ───────
 function safeConn(sc, extra = {}) {
   return {
     id:            sc._id.toString(),
@@ -32,16 +36,19 @@ router.get('/admin/users', async (_req, res) => {
     const users = await User.find({}, 'username role created_at').sort({ _id: 1 }).lean();
     res.json({ users: users.map(u => ({ id: u._id.toString(), username: u.username, role: u.role, created_at: u.created_at })) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/users GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 router.post('/admin/users', async (req, res) => {
   try {
     const { username, password, role = 'user' } = req.body;
-    if (!username?.trim())               return res.status(400).json({ error: 'Username is required.' });
-    if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Role must be admin or user.' });
+    if (!username?.trim())                     return res.status(400).json({ error: 'Username is required.' });
+    if (username.trim().length > MAX_USERNAME)  return res.status(400).json({ error: `Username must be at most ${MAX_USERNAME} characters.` });
+    if (!password || password.length < 8)       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    if (password.length > MAX_PASSWORD)         return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
+    if (!['admin', 'user'].includes(role))      return res.status(400).json({ error: 'Role must be admin or user.' });
 
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const row  = await User.create({ username: username.trim(), password_hash: hash, role });
@@ -49,7 +56,8 @@ router.post('/admin/users', async (req, res) => {
     res.status(201).json({ user: { id: row._id.toString(), username: row.username, role: row.role } });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Username already exists.' });
-    res.status(500).json({ error: err.message });
+    console.error('[admin/users POST]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -63,27 +71,33 @@ router.put('/admin/users/:id', async (req, res) => {
       await User.findByIdAndUpdate(id, { role });
     }
     if (password !== undefined) {
-      if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      if (password.length < 8)        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      if (password.length > MAX_PASSWORD) return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       await User.findByIdAndUpdate(id, { password_hash: hash });
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/users PUT]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
-// POST /admin/users/:id/temp-password — generate a one-time temp password for the user
+// POST /admin/users/:id/temp-password — generate a one-time temp password
 router.post('/admin/users/:id/temp-password', async (req, res) => {
   try {
+    // Use crypto.randomBytes — Math.random() is not cryptographically secure
     const chars  = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
-    const tmpPwd = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    const hash   = await bcrypt.hash(tmpPwd, SALT_ROUNDS);
-    const user   = await User.findByIdAndUpdate(req.params.id, { password_hash: hash }, { new: true });
+    const bytes  = crypto.randomBytes(12);
+    const tmpPwd = Array.from(bytes).map(b => chars[b % chars.length]).join('');
+
+    const hash = await bcrypt.hash(tmpPwd, SALT_ROUNDS);
+    const user = await User.findByIdAndUpdate(req.params.id, { password_hash: hash }, { new: true });
     if (!user) return res.status(404).json({ error: 'User not found.' });
     res.json({ tempPassword: tmpPwd, username: user.username });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/users/temp-password]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -94,7 +108,8 @@ router.delete('/admin/users/:id', async (req, res) => {
     await User.findByIdAndDelete(id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/users DELETE]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -109,23 +124,25 @@ router.get('/admin/connections', async (_req, res) => {
       .lean();
     const connections = await Promise.all(rows.map(async (sc) => {
       const grant_count = await ConnectionGrant.countDocuments({ connection_id: sc._id });
-      return safeConn(sc, {
-        creator_name: sc.created_by?.username || null,
-        grant_count,
-      });
+      return safeConn(sc, { creator_name: sc.created_by?.username || null, grant_count });
     }));
     res.json({ connections });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/connections GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 router.post('/admin/connections', async (req, res) => {
   try {
     const { name, type, host, port, username: dbUser, password, database } = req.body;
-    if (!name?.trim()) return res.status(400).json({ error: 'Connection name is required.' });
-    if (!type)         return res.status(400).json({ error: 'Database type is required.' });
-    if (!database)     return res.status(400).json({ error: 'Database name/path is required.' });
+    if (!name?.trim())              return res.status(400).json({ error: 'Connection name is required.' });
+    if (name.trim().length > MAX_NAME) return res.status(400).json({ error: `Name must be at most ${MAX_NAME} characters.` });
+    if (!type)                      return res.status(400).json({ error: 'Database type is required.' });
+    if (!['mysql','mariadb','postgres','postgresql','sqlite'].includes(String(type).toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid database type.' });
+    }
+    if (!database) return res.status(400).json({ error: 'Database name/path is required.' });
 
     const enc = encrypt(password || '');
     const row = await SavedConnection.create({
@@ -140,7 +157,8 @@ router.post('/admin/connections', async (req, res) => {
 
     res.status(201).json({ id: row._id.toString(), name: row.name });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/connections POST]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -151,6 +169,9 @@ router.put('/admin/connections/:id', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Connection not found.' });
 
     const { name, type, host, port, username: dbUser, password, database } = req.body;
+    if (type !== undefined && !['mysql','mariadb','postgres','postgresql','sqlite'].includes(String(type).toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid database type.' });
+    }
     const enc = password !== undefined ? encrypt(password) : row.db_password_enc;
 
     await SavedConnection.findByIdAndUpdate(id, {
@@ -164,19 +185,20 @@ router.put('/admin/connections/:id', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/connections PUT]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 router.delete('/admin/connections/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    // Delete grants first (cascade)
     await ConnectionGrant.deleteMany({ connection_id: id });
     await SavedConnection.findByIdAndDelete(id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/connections DELETE]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -198,7 +220,9 @@ router.post('/admin/connections/:id/test', async (req, res) => {
     await adapter.close();
     res.json({ success: true });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // Log full error server-side but never expose host/credentials to client
+    console.error('[admin/connections/test]', err.message);
+    res.status(400).json({ error: 'Connection failed. Verify the host, credentials, and database name.' });
   }
 });
 
@@ -214,7 +238,7 @@ router.get('/admin/connections/:id/grants', async (req, res) => {
 
     res.json({
       grants: grants
-        .filter(g => g.user_id != null)   // skip orphaned grants whose user was deleted
+        .filter(g => g.user_id != null)
         .map(g => ({
           id:         g._id.toString(),
           permission: g.permission,
@@ -225,7 +249,8 @@ router.get('/admin/connections/:id/grants', async (req, res) => {
         })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/grants GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -244,7 +269,8 @@ router.post('/admin/connections/:id/grants', async (req, res) => {
 
     res.status(201).json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/grants POST]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -258,7 +284,8 @@ router.put('/admin/connections/:id/grants/:userId', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/grants PUT]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -270,7 +297,8 @@ router.delete('/admin/connections/:id/grants/:userId', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[admin/grants DELETE]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
