@@ -176,8 +176,13 @@ export default function TableGrid({ tableName, dbPermission }) {
 
   const [filterRules, setFilterRules] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [showQuery,   setShowQuery]   = useState(false);
-  const [showSave,    setShowSave]    = useState(false);
+
+  // ── Query bar ──
+  const [queryText,    setQueryText]    = useState('');
+  const [queryManual,  setQueryManual]  = useState(false); // true = user edited manually
+  const [queryRunning, setQueryRunning] = useState(false);
+  const [showSave,     setShowSave]     = useState(false);
+  const queryRef = useRef(null);
 
   const [appliedSearch,       setAppliedSearch]       = useState('');
   const [appliedSearchFields, setAppliedSearchFields] = useState([]);
@@ -205,7 +210,8 @@ export default function TableGrid({ tableName, dbPermission }) {
   useEffect(() => {
     setPage(1); setSorting([]);
     setGlobalSearch(''); setSearchFields([]); setShowFieldPicker(false);
-    setFilterRules([]); setShowFilters(false); setShowQuery(false); setShowSave(false);
+    setFilterRules([]); setShowFilters(false); setShowSave(false);
+    setQueryManual(false); setQueryText(`SELECT *\nFROM \`${tableName}\`\nLIMIT 50 OFFSET 0`);
     setAppliedSearch(''); setAppliedSearchFields([]); setAppliedFilterRules([]);
     setEditingRowIndex(null); setShowAddForm(false); setActionError('');
   }, [tableName]);
@@ -228,6 +234,29 @@ export default function TableGrid({ tableName, dbPermission }) {
     }).catch(() => {});
   }, [tableName]);
 
+  // ── Keep query text in sync with current filters (auto mode only) ────────────
+  useEffect(() => {
+    if (queryManual) return;
+    if (!tableName) return;
+    if (columnNames.length === 0) {
+      setQueryText(`SELECT *\nFROM \`${tableName}\`\nLIMIT ${limit} OFFSET 0`);
+      return;
+    }
+    const { display } = buildSql(tableName, {
+      appliedSearch, appliedSearchFields, appliedFilterRules,
+      sorting, columnNames, limit, page,
+    });
+    setQueryText(display);
+  }, [queryManual, tableName, appliedSearch, appliedSearchFields, appliedFilterRules, sorting, columnNames, limit, page]);
+
+  // ── Auto-resize the query textarea ───────────────────────────────────────────
+  useEffect(() => {
+    const el = queryRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+  }, [queryText]);
+
   const fetchData = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -246,6 +275,20 @@ export default function TableGrid({ tableName, dbPermission }) {
       setError(err.response?.data?.error || 'Failed to load data');
     } finally { setLoading(false); }
   }, [tableName, page, limit, sorting, appliedSearch, appliedSearchFields, appliedFilterRules]);
+
+  // Run the manually-edited query via the SQL endpoint
+  const runManualQuery = useCallback(async () => {
+    const sql = queryText.trim();
+    if (!sql) return;
+    setQueryRunning(true); setError(''); setShowSave(false);
+    try {
+      const res = await api.post('/query', { sql });
+      setData(res.data.rows || []);
+      setTotal(res.data.rows?.length || 0);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Query failed.');
+    } finally { setQueryRunning(false); }
+  }, [queryText]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -463,20 +506,6 @@ export default function TableGrid({ tableName, dbPermission }) {
           )}
         </button>
 
-        {/* Query toggle */}
-        <button onClick={() => { setShowQuery(s => !s); setShowSave(false); }}
-          className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-all whitespace-nowrap ${
-            showQuery
-              ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
-              : 'bg-[#0d0d10] border-zinc-800 text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
-            <path d="M1.5 4L4.5 7L1.5 10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M6 10h4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          Query
-        </button>
 
         {/* Active sort */}
         {sorting[0] && (
@@ -560,48 +589,84 @@ export default function TableGrid({ tableName, dbPermission }) {
         </div>
       )}
 
-      {/* ── Query panel ── */}
-      {showQuery && (() => {
-        const { display, saveable } = buildSql(tableName, {
-          appliedSearch, appliedSearchFields, appliedFilterRules,
-          sorting, columnNames, limit, page,
-        });
-        return (
-          <div className="bg-[#111113] border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between bg-[#18181b]">
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Current query</span>
-              <div className="flex items-center gap-2">
-                {showSave ? (
-                  <InlineSaveModal sql={saveable} onClose={() => setShowSave(false)} />
-                ) : (
-                  <>
-                    <button
-                      onClick={() => { navigator.clipboard?.writeText(saveable); }}
-                      className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors flex items-center gap-1"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <rect x="3.5" y="1" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
-                        <path d="M1 4v5.5A1.5 1.5 0 002.5 11H8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
-                      </svg>
-                      Copy
-                    </button>
-                    <button
-                      onClick={() => setShowSave(true)}
-                      className="text-xs px-2.5 py-1 bg-[#232329] hover:bg-[#2c2c32] border border-zinc-700 text-zinc-300 rounded-lg transition-all font-medium flex items-center gap-1.5"
-                    >
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M5 1v8M1 5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                      </svg>
-                      Save query
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto whitespace-pre leading-relaxed bg-[#0d0d10]">{display}</pre>
+      {/* ── Query bar (always visible) ── */}
+      <div className={`bg-[#0d0d10] border rounded-xl overflow-hidden transition-colors ${
+        queryManual ? 'border-violet-500/30' : 'border-zinc-800'
+      }`}>
+        {/* Header row */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800/80 bg-[#111113]">
+          <div className="flex items-center gap-2">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" className="text-zinc-600 shrink-0">
+              <path d="M1.5 3.5L4 6.5L1.5 9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M5.5 9.5H9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            <span className="text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">SQL</span>
+            {queryManual && (
+              <span className="text-[10px] text-violet-400 flex items-center gap-1">
+                · edited
+                <button
+                  onClick={() => { setQueryManual(false); setShowSave(false); setError(''); }}
+                  className="text-zinc-600 hover:text-zinc-300 underline transition-colors ml-0.5"
+                >reset</button>
+              </span>
+            )}
           </div>
-        );
-      })()}
+          <div className="flex items-center gap-1.5">
+            {showSave ? (
+              <InlineSaveModal sql={queryText} onClose={() => setShowSave(false)} />
+            ) : (
+              <>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(queryText)}
+                  title="Copy"
+                  className="text-[10px] text-zinc-600 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded hover:bg-white/[0.05]"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setShowSave(true)}
+                  className="text-[10px] text-zinc-500 hover:text-violet-300 transition-colors px-1.5 py-0.5 rounded hover:bg-violet-500/[0.08] flex items-center gap-1"
+                >
+                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M4.5 1v7M1 4.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  Save
+                </button>
+                <button
+                  onClick={queryManual ? runManualQuery : fetchData}
+                  disabled={queryRunning}
+                  title="Run (Ctrl+Enter)"
+                  className={`text-[10px] px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 transition-all disabled:opacity-50 ${
+                    queryManual
+                      ? 'bg-gradient-violet text-white hover:opacity-90'
+                      : 'bg-[#1c1c1f] border border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {queryRunning
+                    ? <><span className="w-2.5 h-2.5 border border-white/30 border-t-white rounded-full animate-spin-fast"/></>
+                    : <><svg width="8" height="9" viewBox="0 0 8 9" fill="currentColor"><path d="M1 1l6 3.5L1 8V1z"/></svg> Run</>
+                  }
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Editable textarea */}
+        <textarea
+          ref={queryRef}
+          value={queryText}
+          onChange={e => { setQueryText(e.target.value); setQueryManual(true); setShowSave(false); setError(''); }}
+          onKeyDown={e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              queryManual ? runManualQuery() : fetchData();
+            }
+          }}
+          spellCheck={false}
+          className="w-full bg-[#0d0d10] text-zinc-300 text-xs font-mono px-4 py-3 resize-none focus:outline-none leading-relaxed placeholder-zinc-700 block"
+          style={{ minHeight: '60px', maxHeight: '180px' }}
+          placeholder={`SELECT * FROM \`${tableName}\` LIMIT 50`}
+        />
+      </div>
 
       {/* ── Add row form ── */}
       {showAddForm && (
