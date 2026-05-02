@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../api/client.js';
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
 function EyeIcon({ open }) {
   return open ? (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
@@ -35,8 +33,6 @@ function BackIcon() {
   );
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-
 const inputCls = [
   'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl',
   'px-3.5 py-2.5 placeholder-zinc-600',
@@ -51,12 +47,10 @@ function LogoMark() {
       <path d="M7 14h14M7 9.5h14M7 18.5h9" stroke="url(#lg2)" strokeWidth="1.5" strokeLinecap="round"/>
       <defs>
         <linearGradient id="lg" x1="1" y1="1" x2="27" y2="27" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#a78bfa"/>
-          <stop offset="1" stopColor="#6366f1"/>
+          <stop stopColor="#a78bfa"/><stop offset="1" stopColor="#6366f1"/>
         </linearGradient>
         <linearGradient id="lg2" x1="7" y1="9" x2="21" y2="19" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#a78bfa"/>
-          <stop offset="1" stopColor="#818cf8"/>
+          <stop stopColor="#a78bfa"/><stop offset="1" stopColor="#818cf8"/>
         </linearGradient>
       </defs>
     </svg>
@@ -89,7 +83,6 @@ function SuccessBox({ msg }) {
   );
 }
 
-// OTP digit input — single box with spacing
 function OtpInput({ value, onChange }) {
   return (
     <input
@@ -110,11 +103,9 @@ function OtpInput({ value, onChange }) {
   );
 }
 
-// ── Resend button with cooldown ───────────────────────────────────────────────
-
 function ResendButton({ userId, type, onSuccess, onError }) {
   const [cooldown, setCooldown] = useState(0);
-  const [busy,     setBusy]     = useState(false);
+  const [busy, setBusy] = useState(false);
   const timerRef = useRef(null);
 
   const startCooldown = (secs = 60) => {
@@ -140,72 +131,81 @@ function ResendButton({ userId, type, onSuccess, onError }) {
       const match = msg.match(/wait (\d+)s/);
       if (match) startCooldown(parseInt(match[1]));
       onError?.(msg);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleResend}
-      disabled={busy || cooldown > 0}
-      className="text-xs text-zinc-500 hover:text-violet-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors"
-    >
+    <button type="button" onClick={handleResend} disabled={busy || cooldown > 0}
+      className="text-xs text-zinc-500 hover:text-violet-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors">
       {busy ? 'Sending…' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
     </button>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
-export default function AppLogin({ mode, onLogin }) {
+export default function AppLogin({ mode, onLogin, inviteToken }) {
   const isSetup = mode === 'setup';
 
-  // Screen: 'form' | 'verify-email' | 'forgot-email' | 'forgot-reset'
-  const [screen,       setScreen]       = useState('form');
-  const [tab,          setTab]          = useState('login');
+  const [screen, setScreen] = useState('form');
+  const [tab, setTab] = useState('login');
 
   // Form fields
-  const [username,     setUsername]     = useState('');
-  const [email,        setEmail]        = useState('');
-  const [password,     setPassword]     = useState('');
-  const [confirm,      setConfirm]      = useState('');
-  const [showPwd,      setShowPwd]      = useState(false);
-  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // OTP / reset
-  const [otpValue,     setOtpValue]     = useState('');
-  const [newPwd,       setNewPwd]       = useState('');
-  const [newPwdConf,   setNewPwdConf]   = useState('');
-  const [showNewPwd,   setShowNewPwd]   = useState(false);
-  const [showNewConf,  setShowNewConf]  = useState(false);
-  const [pendingId,    setPendingId]    = useState('');   // userId awaiting OTP
-  const [pendingEmail, setPendingEmail] = useState('');   // email shown on OTP screen
+  const [otpValue, setOtpValue] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [newPwdConf, setNewPwdConf] = useState('');
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [showNewConf, setShowNewConf] = useState(false);
+  const [pendingId, setPendingId] = useState('');
+  const [pendingEmail, setPendingEmail] = useState('');
 
-  // UI state
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [success,  setSuccess]  = useState('');
+  // Invite join
+  const [inviteInfo, setInviteInfo] = useState(null); // { email, role, tenant_name }
+  const [joinPwd, setJoinPwd] = useState('');
+  const [joinConf, setJoinConf] = useState('');
+  const [showJoinPwd, setShowJoinPwd] = useState(false);
+  const [showJoinConf, setShowJoinConf] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const clearMessages = () => { setError(''); setSuccess(''); };
 
+  // Auto-detect invite token on load
+  useEffect(() => {
+    if (!inviteToken) return;
+    setLoading(true);
+    api.get(`/auth/invite/${inviteToken}`)
+      .then(res => {
+        setInviteInfo(res.data);
+        setScreen('join');
+      })
+      .catch(() => {
+        setError('This invite link is invalid or has expired.');
+      })
+      .finally(() => setLoading(false));
+  }, [inviteToken]);
+
   const switchTab = (t) => {
-    setTab(t);
-    setUsername(''); setEmail(''); setPassword(''); setConfirm('');
-    setShowPwd(false); setShowConfirm(false);
+    setTab(t); setOrgName(''); setUsername(''); setEmail('');
+    setPassword(''); setConfirm(''); setShowPwd(false); setShowConfirm(false);
     clearMessages();
   };
 
   const goBack = () => {
-    setScreen('form');
-    setOtpValue(''); setNewPwd(''); setNewPwdConf('');
-    setShowNewPwd(false); setShowNewConf(false);
-    clearMessages();
+    setScreen('form'); setOtpValue(''); setNewPwd(''); setNewPwdConf('');
+    setShowNewPwd(false); setShowNewConf(false); clearMessages();
   };
 
   // ── Submit: login / register / setup ───────────────────────────────────────
-
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     clearMessages();
@@ -218,9 +218,8 @@ export default function AppLogin({ mode, onLogin }) {
         onLogin(res.data.user);
       } else if (isRegister) {
         const res = await api.post('/auth/register', {
-          username: username.trim(),
-          email:    email.trim(),
-          password,
+          orgName: orgName.trim(), username: username.trim(),
+          email: email.trim(), password,
         });
         if (res.data.pendingVerification) {
           setPendingId(res.data.userId);
@@ -228,7 +227,6 @@ export default function AppLogin({ mode, onLogin }) {
           setScreen('verify-email');
         }
       } else {
-        // Login — identifier can be username or email
         const res = await api.post('/auth/login', { identifier: username.trim(), password });
         if (res.data.pendingVerification) {
           setPendingId(res.data.userId);
@@ -251,12 +249,10 @@ export default function AppLogin({ mode, onLogin }) {
   };
 
   // ── Submit: verify email OTP ────────────────────────────────────────────────
-
   const handleVerifyEmail = async (e) => {
     e.preventDefault();
     if (otpValue.length !== 6) return setError('Enter the 6-digit code from your email.');
-    clearMessages();
-    setLoading(true);
+    clearMessages(); setLoading(true);
     try {
       const res = await api.post('/auth/verify-email', { userId: pendingId, otp: otpValue });
       onLogin(res.data.user);
@@ -266,12 +262,10 @@ export default function AppLogin({ mode, onLogin }) {
   };
 
   // ── Submit: forgot password — send OTP ─────────────────────────────────────
-
   const handleForgotEmail = async (e) => {
     e.preventDefault();
     if (!email.trim()) return setError('Email is required.');
-    clearMessages();
-    setLoading(true);
+    clearMessages(); setLoading(true);
     try {
       const res = await api.post('/auth/forgot-password', { email: email.trim() });
       if (res.data.userId) {
@@ -279,7 +273,6 @@ export default function AppLogin({ mode, onLogin }) {
         setPendingEmail(email.trim());
         setScreen('forgot-reset');
       } else {
-        // Email not found — still show generic message so we don't reveal existence
         setSuccess('If an account with that email exists, a reset code was sent.');
       }
     } catch (err) {
@@ -288,18 +281,15 @@ export default function AppLogin({ mode, onLogin }) {
   };
 
   // ── Submit: reset password with OTP ────────────────────────────────────────
-
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (otpValue.length !== 6) return setError('Enter the 6-digit reset code.');
     if (!newPwd || newPwd.length < 8) return setError('Password must be at least 8 characters.');
     if (newPwd !== newPwdConf) return setError('Passwords do not match.');
-    clearMessages();
-    setLoading(true);
+    clearMessages(); setLoading(true);
     try {
       await api.post('/auth/reset-password', { userId: pendingId, otp: otpValue, newPassword: newPwd });
-      setScreen('form');
-      setTab('login');
+      setScreen('form'); setTab('login');
       setOtpValue(''); setNewPwd(''); setNewPwdConf('');
       setSuccess('Password reset successfully. Sign in with your new password.');
     } catch (err) {
@@ -307,9 +297,35 @@ export default function AppLogin({ mode, onLogin }) {
     } finally { setLoading(false); }
   };
 
+  // ── Submit: accept invite ───────────────────────────────────────────────────
+  const handleJoin = async (e) => {
+    e.preventDefault();
+    if (!username.trim()) return setError('Username is required.');
+    if (!joinPwd || joinPwd.length < 8) return setError('Password must be at least 8 characters.');
+    if (joinPwd !== joinConf) return setError('Passwords do not match.');
+    clearMessages(); setLoading(true);
+    try {
+      const res = await api.post('/auth/join', {
+        token: inviteToken, username: username.trim(), password: joinPwd,
+      });
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      onLogin(res.data.user);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Something went wrong.');
+    } finally { setLoading(false); }
+  };
+
   const isRegister = !isSetup && tab === 'register';
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const subtitle = isSetup ? 'Create your admin account'
+    : screen === 'verify-email' ? 'Verify your email'
+    : screen === 'forgot-email' ? 'Reset your password'
+    : screen === 'forgot-reset' ? 'Set a new password'
+    : screen === 'join'         ? `Join ${inviteInfo?.tenant_name || 'workspace'}`
+    : isRegister                ? 'Create your workspace'
+    : 'Sign in to your workspace';
 
   return (
     <div className="min-h-full bg-[#09090b] dot-grid flex items-center justify-center p-4 relative overflow-hidden">
@@ -317,35 +333,70 @@ export default function AppLogin({ mode, onLogin }) {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/[0.06] blur-[120px]" />
       </div>
 
-      <div className="w-full max-w-[360px] relative z-10">
-
+      <div className="w-full max-w-[380px] relative z-10">
         {/* Brand */}
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-[#111113] border border-white/[0.08] flex items-center justify-center mx-auto mb-5 shadow-card">
             <LogoMark />
           </div>
           <h1 className="text-zinc-100 text-xl font-semibold tracking-tight mb-1">DB Studio</h1>
-          <p className="text-zinc-500 text-sm">
-            {isSetup
-              ? 'Create your admin account'
-              : screen === 'verify-email'
-              ? 'Verify your email'
-              : screen === 'forgot-email'
-              ? 'Reset your password'
-              : screen === 'forgot-reset'
-              ? 'Set a new password'
-              : isRegister
-              ? 'Create a new account'
-              : 'Sign in to your workspace'}
-          </p>
+          <p className="text-zinc-500 text-sm">{subtitle}</p>
         </div>
 
-        {/* ── Email verification screen ────────────────────────────────────── */}
+        {/* ── Join invite screen ────────────────────────────────────────────── */}
+        {screen === 'join' && inviteInfo && (
+          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+            {/* Invite banner */}
+            <div className="bg-violet-500/[0.08] border border-violet-500/20 rounded-xl px-4 py-3 space-y-0.5">
+              <p className="text-violet-300 text-xs font-medium">Invited to join</p>
+              <p className="text-zinc-200 text-sm font-semibold">{inviteInfo.tenant_name}</p>
+              <p className="text-zinc-500 text-xs">{inviteInfo.email} · {inviteInfo.role === 'tenant_admin' ? 'Admin' : 'Member'}</p>
+            </div>
+
+            <form onSubmit={handleJoin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Choose a username</label>
+                <input type="text" autoComplete="username" value={username}
+                  onChange={e => { setUsername(e.target.value); clearMessages(); }}
+                  placeholder="username" required className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
+                <div className="relative">
+                  <input type={showJoinPwd ? 'text' : 'password'} autoComplete="new-password"
+                    value={joinPwd} onChange={e => { setJoinPwd(e.target.value); clearMessages(); }}
+                    placeholder="At least 8 characters" required className={inputCls + ' pr-10'} />
+                  <button type="button" tabIndex={-1} onClick={() => setShowJoinPwd(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <EyeIcon open={showJoinPwd} />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm password</label>
+                <div className="relative">
+                  <input type={showJoinConf ? 'text' : 'password'} autoComplete="new-password"
+                    value={joinConf} onChange={e => { setJoinConf(e.target.value); clearMessages(); }}
+                    placeholder="Re-enter password" required className={inputCls + ' pr-10'} />
+                  <button type="button" tabIndex={-1} onClick={() => setShowJoinConf(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <EyeIcon open={showJoinConf} />
+                  </button>
+                </div>
+              </div>
+              <ErrorBox msg={error} />
+              <button type="submit" disabled={loading}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm">
+                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Joining…</> : 'Join workspace'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ── Email verification screen ─────────────────────────────────────── */}
         {screen === 'verify-email' && (
           <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
-            <div className="flex justify-center">
-              <MailIcon />
-            </div>
+            <div className="flex justify-center"><MailIcon /></div>
             <div className="text-center space-y-1">
               <p className="text-zinc-200 text-sm font-medium">Check your inbox</p>
               <p className="text-zinc-500 text-xs leading-relaxed">
@@ -353,158 +404,100 @@ export default function AppLogin({ mode, onLogin }) {
                 <span className="text-zinc-300 font-medium">{pendingEmail}</span>
               </p>
             </div>
-
             <form onSubmit={handleVerifyEmail} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">Verification code</label>
                 <OtpInput value={otpValue} onChange={v => { setOtpValue(v); clearMessages(); }} />
               </div>
-
-              <ErrorBox  msg={error}   />
+              <ErrorBox msg={error} />
               <SuccessBox msg={success} />
-
-              <button
-                type="submit"
-                disabled={loading || otpValue.length !== 6}
-                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
-              >
-                {loading ? (
-                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Verifying…</>
-                ) : 'Verify email'}
+              <button type="submit" disabled={loading || otpValue.length !== 6}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Verifying…</> : 'Verify email'}
               </button>
             </form>
-
             <div className="flex items-center justify-between pt-1">
               <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
                 <BackIcon /> Back
               </button>
-              <ResendButton
-                userId={pendingId}
-                type="verify_email"
-                onSuccess={msg => setSuccess(msg)}
-                onError={msg => setError(msg)}
-              />
+              <ResendButton userId={pendingId} type="verify_email"
+                onSuccess={msg => setSuccess(msg)} onError={msg => setError(msg)} />
             </div>
           </div>
         )}
 
-        {/* ── Forgot password — enter email ────────────────────────────────── */}
+        {/* ── Forgot password — enter email ─────────────────────────────────── */}
         {screen === 'forgot-email' && (
           <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
             <form onSubmit={handleForgotEmail} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">Account email</label>
-                <input
-                  type="email"
-                  autoComplete="email"
-                  value={email}
+                <input type="email" autoComplete="email" value={email}
                   onChange={e => { setEmail(e.target.value); clearMessages(); }}
-                  placeholder="you@example.com"
-                  required
-                  className={inputCls}
-                />
+                  placeholder="you@example.com" required className={inputCls} />
               </div>
-
-              <ErrorBox  msg={error}   />
+              <ErrorBox msg={error} />
               <SuccessBox msg={success} />
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
-              >
-                {loading ? (
-                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Sending…</>
-                ) : 'Send reset code'}
+              <button type="submit" disabled={loading}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Sending…</> : 'Send reset code'}
               </button>
             </form>
-
             <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-4">
               <BackIcon /> Back to sign in
             </button>
           </div>
         )}
 
-        {/* ── Forgot password — OTP + new password ────────────────────────── */}
+        {/* ── Forgot password — OTP + new password ─────────────────────────── */}
         {screen === 'forgot-reset' && (
           <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
-            <div className="flex justify-center">
-              <MailIcon />
-            </div>
+            <div className="flex justify-center"><MailIcon /></div>
             <div className="text-center space-y-1">
               <p className="text-zinc-200 text-sm font-medium">Reset code sent</p>
-              <p className="text-zinc-500 text-xs">
-                Code sent to <span className="text-zinc-300 font-medium">{pendingEmail}</span>
-              </p>
+              <p className="text-zinc-500 text-xs">Code sent to <span className="text-zinc-300 font-medium">{pendingEmail}</span></p>
             </div>
-
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">6-digit reset code</label>
                 <OtpInput value={otpValue} onChange={v => { setOtpValue(v); clearMessages(); }} />
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">New password</label>
                 <div className="relative">
-                  <input
-                    type={showNewPwd ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    value={newPwd}
-                    onChange={e => { setNewPwd(e.target.value); clearMessages(); }}
-                    placeholder="At least 8 characters"
-                    required
-                    className={inputCls + ' pr-10'}
-                  />
+                  <input type={showNewPwd ? 'text' : 'password'} autoComplete="new-password"
+                    value={newPwd} onChange={e => { setNewPwd(e.target.value); clearMessages(); }}
+                    placeholder="At least 8 characters" required className={inputCls + ' pr-10'} />
                   <button type="button" tabIndex={-1} onClick={() => setShowNewPwd(p => !p)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
                     <EyeIcon open={showNewPwd} />
                   </button>
                 </div>
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm new password</label>
                 <div className="relative">
-                  <input
-                    type={showNewConf ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    value={newPwdConf}
-                    onChange={e => { setNewPwdConf(e.target.value); clearMessages(); }}
-                    placeholder="Re-enter new password"
-                    required
-                    className={inputCls + ' pr-10'}
-                  />
+                  <input type={showNewConf ? 'text' : 'password'} autoComplete="new-password"
+                    value={newPwdConf} onChange={e => { setNewPwdConf(e.target.value); clearMessages(); }}
+                    placeholder="Re-enter new password" required className={inputCls + ' pr-10'} />
                   <button type="button" tabIndex={-1} onClick={() => setShowNewConf(p => !p)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
                     <EyeIcon open={showNewConf} />
                   </button>
                 </div>
               </div>
-
               <ErrorBox msg={error} />
-
-              <button
-                type="submit"
-                disabled={loading || otpValue.length !== 6}
-                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
-              >
-                {loading ? (
-                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Resetting…</>
-                ) : 'Reset password'}
+              <button type="submit" disabled={loading || otpValue.length !== 6}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Resetting…</> : 'Reset password'}
               </button>
             </form>
-
             <div className="flex items-center justify-between pt-1">
               <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
                 <BackIcon /> Back
               </button>
-              <ResendButton
-                userId={pendingId}
-                type="reset_password"
-                onSuccess={msg => setSuccess(msg)}
-                onError={msg => setError(msg)}
-              />
+              <ResendButton userId={pendingId} type="reset_password"
+                onSuccess={msg => setSuccess(msg)} onError={msg => setError(msg)} />
             </div>
           </div>
         )}
@@ -519,26 +512,18 @@ export default function AppLogin({ mode, onLogin }) {
                   <path d="M7 5.5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 </svg>
                 <p className="text-amber-400/90 text-xs leading-relaxed">
-                  First-time setup — this admin account manages all users and database connections.
+                  First-time setup — this creates your super admin account to manage all workspaces.
                 </p>
               </div>
             )}
 
             {!isSetup && (
               <div className="flex bg-[#111113] border border-white/[0.07] rounded-xl p-1 mb-4">
-                {[['login', 'Sign in'], ['register', 'Register']].map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => switchTab(key)}
+                {[['login', 'Sign in'], ['register', 'New workspace']].map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => switchTab(key)}
                     className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                      tab === key
-                        ? 'bg-gradient-violet text-white shadow-sm'
-                        : 'text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    {label}
-                  </button>
+                      tab === key ? 'bg-gradient-violet text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}>{label}</button>
                 ))}
               </div>
             )}
@@ -546,48 +531,42 @@ export default function AppLogin({ mode, onLogin }) {
             <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
               <form onSubmit={handleFormSubmit} className="space-y-4">
 
+                {isRegister && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Organization name</label>
+                    <input type="text" autoComplete="organization" value={orgName}
+                      onChange={e => { setOrgName(e.target.value); clearMessages(); }}
+                      placeholder="Acme Corp" required className={inputCls} />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-1.5">
                     {tab === 'login' && !isSetup ? 'Username or email' : 'Username'}
                   </label>
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    value={username}
+                  <input type="text" autoComplete="username" value={username}
                     onChange={e => { setUsername(e.target.value); clearMessages(); }}
                     placeholder={tab === 'login' && !isSetup ? 'Username or email' : 'Enter username'}
-                    required
-                    className={inputCls}
-                  />
+                    required className={inputCls} />
                 </div>
 
                 {isRegister && (
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      value={email}
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Work email</label>
+                    <input type="email" autoComplete="email" value={email}
                       onChange={e => { setEmail(e.target.value); clearMessages(); }}
-                      placeholder="you@example.com"
-                      required
-                      className={inputCls}
-                    />
+                      placeholder="you@company.com" required className={inputCls} />
                   </div>
                 )}
 
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
                   <div className="relative">
-                    <input
-                      type={showPwd ? 'text' : 'password'}
+                    <input type={showPwd ? 'text' : 'password'}
                       autoComplete={isRegister || isSetup ? 'new-password' : 'current-password'}
-                      value={password}
-                      onChange={e => { setPassword(e.target.value); clearMessages(); }}
+                      value={password} onChange={e => { setPassword(e.target.value); clearMessages(); }}
                       placeholder={isRegister || isSetup ? 'At least 8 characters' : 'Enter password'}
-                      required
-                      className={inputCls + ' pr-10'}
-                    />
+                      required className={inputCls + ' pr-10'} />
                     <button type="button" tabIndex={-1} onClick={() => setShowPwd(p => !p)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
                       <EyeIcon open={showPwd} />
@@ -599,15 +578,9 @@ export default function AppLogin({ mode, onLogin }) {
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm password</label>
                     <div className="relative">
-                      <input
-                        type={showConfirm ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        value={confirm}
-                        onChange={e => { setConfirm(e.target.value); clearMessages(); }}
-                        placeholder="Re-enter password"
-                        required
-                        className={inputCls + ' pr-10'}
-                      />
+                      <input type={showConfirm ? 'text' : 'password'} autoComplete="new-password"
+                        value={confirm} onChange={e => { setConfirm(e.target.value); clearMessages(); }}
+                        placeholder="Re-enter password" required className={inputCls + ' pr-10'} />
                       <button type="button" tabIndex={-1} onClick={() => setShowConfirm(p => !p)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
                         <EyeIcon open={showConfirm} />
@@ -616,36 +589,29 @@ export default function AppLogin({ mode, onLogin }) {
                   </div>
                 )}
 
-                <ErrorBox  msg={error}   />
+                <ErrorBox msg={error} />
                 <SuccessBox msg={success} />
 
                 {isRegister && (
                   <p className="text-zinc-600 text-xs leading-relaxed">
-                    New accounts have <span className="text-zinc-500 font-medium">user</span> role. An admin must grant access to database connections.
+                    You'll be the <span className="text-zinc-500 font-medium">admin</span> of your workspace. Invite teammates after signing in.
                   </p>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm mt-1"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm mt-1">
                   {loading ? (
                     <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Please wait…</>
                   ) : (
-                    isSetup ? 'Create admin account' : isRegister ? 'Create account' : 'Sign in'
+                    isSetup ? 'Create admin account' : isRegister ? 'Create workspace' : 'Sign in'
                   )}
                 </button>
               </form>
 
-              {/* Forgot password link */}
               {!isSetup && tab === 'login' && (
                 <div className="mt-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => { setEmail(''); clearMessages(); setScreen('forgot-email'); }}
-                    className="text-xs text-zinc-500 hover:text-violet-400 transition-colors"
-                  >
+                  <button type="button" onClick={() => { setEmail(''); clearMessages(); setScreen('forgot-email'); }}
+                    className="text-xs text-zinc-500 hover:text-violet-400 transition-colors">
                     Forgot password?
                   </button>
                 </div>
@@ -653,7 +619,6 @@ export default function AppLogin({ mode, onLogin }) {
             </div>
           </>
         )}
-
       </div>
     </div>
   );

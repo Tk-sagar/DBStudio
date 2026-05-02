@@ -64,4 +64,31 @@ async function sendPasswordReset(to, otp) {
   });
 }
 
-module.exports = { sendVerifyEmail, sendPasswordReset, isConfigured };
+async function sendInvite(to, invitedBy, tenantName, joinUrl) {
+  if (!isConfigured()) {
+    console.log(`[mailer] SMTP not configured — invite link for ${to}: ${joinUrl}`);
+    return;
+  }
+  await getTransporter().sendMail({
+    from:    FROM,
+    to,
+    subject: `${APP_NAME} — You've been invited to ${tenantName}`,
+    html: `
+      <div style="font-family:system-ui,sans-serif;max-width:440px;margin:0 auto;padding:36px 28px;background:#09090b;color:#e4e4e7;border-radius:14px">
+        <h2 style="margin:0 0 6px;color:#a78bfa;font-size:17px;font-weight:600">${APP_NAME}</h2>
+        <h3 style="margin:0 0 14px;color:#f4f4f5;font-size:15px;font-weight:600">You've been invited</h3>
+        <p style="margin:0 0 24px;color:#a1a1aa;font-size:14px;line-height:1.6">
+          <strong style="color:#e4e4e7">${invitedBy}</strong> has invited you to join the
+          <strong style="color:#e4e4e7">${tenantName}</strong> workspace on ${APP_NAME}.
+        </p>
+        <a href="${joinUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:600">Accept invitation</a>
+        <p style="margin:20px 0 0;color:#52525b;font-size:12px">
+          This link expires in <strong style="color:#71717a">7 days</strong>.<br>
+          If you didn't expect this, you can safely ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendVerifyEmail, sendPasswordReset, sendInvite, isConfigured };

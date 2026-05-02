@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppLogin          from './pages/AppLogin.jsx';
 import AdminPanel        from './pages/AdminPanel.jsx';
+import SuperAdminPanel   from './pages/SuperAdminPanel.jsx';
 import Dashboard         from './pages/Dashboard.jsx';
 import ConnectionPicker  from './components/ConnectionPicker.jsx';
 import api from './api/client.js';
@@ -28,6 +29,10 @@ export default function App({ initialData }) {
   const [connectingId,    setConnectingId]    = useState(null);
   const [showAdmin,       setShowAdmin]       = useState(false);
   const [showPicker,      setShowPicker]      = useState(false);
+  const [inviteToken]                         = useState(
+    initialData?.inviteToken ||
+    (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invite') || null : null)
+  );
 
   useEffect(() => {
     if (initialData) return;
@@ -60,6 +65,9 @@ export default function App({ initialData }) {
   const handleLogin = (loggedInUser) => {
     setUser(loggedInUser);
     setNeedsSetup(false);
+    if (typeof window !== 'undefined' && window.location.search.includes('invite')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   };
 
   // Called whenever a connection is made (initial or additional)
@@ -146,10 +154,14 @@ export default function App({ initialData }) {
   if (loading) return <Spinner />;
 
   if (needsSetup || !user) {
-    return <AppLogin mode={needsSetup ? 'setup' : 'login'} onLogin={handleLogin} />;
+    return <AppLogin mode={needsSetup ? 'setup' : 'login'} onLogin={handleLogin} inviteToken={inviteToken} />;
   }
 
-  if (showAdmin) {
+  if (user.role === 'super_admin') {
+    return <SuperAdminPanel user={user} onLogout={handleLogout} />;
+  }
+
+  if (showAdmin && user.role === 'tenant_admin') {
     return <AdminPanel user={user} onClose={() => setShowAdmin(false)} onLogout={handleLogout} />;
   }
 
@@ -158,7 +170,7 @@ export default function App({ initialData }) {
       <ConnectionPicker
         user={user}
         onConnect={handleConnect}
-        onAdmin={() => setShowAdmin(true)}
+        onAdmin={user.role === 'tenant_admin' ? () => setShowAdmin(true) : undefined}
         onLogout={handleLogout}
       />
     );
@@ -176,7 +188,7 @@ export default function App({ initialData }) {
         connectingId={connectingId}
         onDisconnect={handleDisconnect}
         onLogout={handleLogout}
-        onAdmin={() => setShowAdmin(true)}
+        onAdmin={user.role === 'tenant_admin' ? () => setShowAdmin(true) : undefined}
         onSwitchConnection={handleSwitchConnection}
         onCloseConnection={handleCloseConnection}
         onAddConnection={() => setShowPicker(true)}
@@ -189,7 +201,7 @@ export default function App({ initialData }) {
             <ConnectionPicker
               user={user}
               onConnect={handleConnect}
-              onAdmin={() => { setShowPicker(false); setShowAdmin(true); }}
+              onAdmin={user.role === 'tenant_admin' ? () => { setShowPicker(false); setShowAdmin(true); } : undefined}
               onLogout={handleLogout}
               onClose={() => setShowPicker(false)}
             />

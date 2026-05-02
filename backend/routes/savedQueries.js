@@ -7,9 +7,6 @@ const requirePerm    = require('../middleware/requirePerm');
 
 router.use(requireAppAuth);
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// sql is intentionally omitted — fetch via GET /queries/:id when needed
 function safeQuery(q, currentUserId) {
   return {
     id:          q._id.toString(),
@@ -28,23 +25,19 @@ function safeQuery(q, currentUserId) {
   };
 }
 
-// ── Single query with SQL (full permission only) ──────────────────────────────
 router.get('/queries/:id', requireDbAuth, requirePerm('full'), async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const q = await SavedQuery.findById(req.params.id)
+    const userId   = req.session.user.id;
+    const tenantId = req.session.user.tenant_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId })
       .populate('created_by', 'username')
       .populate('shared_with', 'username')
       .lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
 
-    const isOwner  = q.created_by?._id
-      ? q.created_by._id.toString() === userId
-      : q.created_by?.toString() === userId;
+    const isOwner  = q.created_by?._id ? q.created_by._id.toString() === userId : q.created_by?.toString() === userId;
     const isShared = (q.shared_with || []).some(u => (u._id || u).toString() === userId);
-    if (!isOwner && !isShared && !q.is_public) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
+    if (!isOwner && !isShared && !q.is_public) return res.status(403).json({ error: 'Access denied.' });
 
     res.json({ query: { ...safeQuery(q, userId), sql: q.sql } });
   } catch (err) {
@@ -53,26 +46,20 @@ router.get('/queries/:id', requireDbAuth, requirePerm('full'), async (req, res) 
   }
 });
 
-// ── List — own + shared with me + public, scoped to active connection ─────────
 router.get('/queries', requireDbAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const connId = req.session.activeConnId || null;
+    const userId   = req.session.user.id;
+    const connId   = req.session.activeConnId || null;
+    const tenantId = req.session.user.tenant_id;
 
-    // Strict connection scope: only show queries saved on this exact connection
     const connScope = connId
       ? { connection_id: connId }
       : { $or: [{ connection_id: null }, { connection_id: { $exists: false } }] };
 
     const queries = await SavedQuery.find({
       $and: [
-        {
-          $or: [
-            { created_by: userId },
-            { shared_with: userId },
-            { is_public: true },
-          ],
-        },
+        { tenant_id: tenantId },
+        { $or: [{ created_by: userId }, { shared_with: userId }, { is_public: true }] },
         ...(Object.keys(connScope).length ? [connScope] : []),
       ],
     })
@@ -88,7 +75,6 @@ router.get('/queries', requireDbAuth, async (req, res) => {
   }
 });
 
-// ── Create ────────────────────────────────────────────────────────────────────
 router.post('/queries', requireDbAuth, async (req, res) => {
   try {
     const { name, description = '', sql } = req.body;
@@ -101,6 +87,7 @@ router.post('/queries', requireDbAuth, async (req, res) => {
       description:   description?.trim() || '',
       sql:           sql.trim(),
       created_by:    req.session.user.id,
+      tenant_id:     req.session.user.tenant_id,
       connection_id: req.session.activeConnId || null,
     });
 
@@ -111,13 +98,13 @@ router.post('/queries', requireDbAuth, async (req, res) => {
   }
 });
 
-// ── Update (owner only) ───────────────────────────────────────────────────────
 router.put('/queries/:id', requireDbAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const q = await SavedQuery.findById(req.params.id).lean();
+    const userId   = req.session.user.id;
+    const tenantId = req.session.user.tenant_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
       return res.status(403).json({ error: 'Only the owner can edit this query.' });
     }
 
@@ -138,16 +125,15 @@ router.put('/queries/:id', requireDbAuth, async (req, res) => {
   }
 });
 
-// ── Delete (owner or admin) ───────────────────────────────────────────────────
 router.delete('/queries/:id', requireDbAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const q = await SavedQuery.findById(req.params.id).lean();
+    const userId   = req.session.user.id;
+    const tenantId = req.session.user.tenant_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
       return res.status(403).json({ error: 'Only the owner can delete this query.' });
     }
-
     await SavedQuery.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
@@ -156,18 +142,16 @@ router.delete('/queries/:id', requireDbAuth, async (req, res) => {
   }
 });
 
-// ── Run a saved query (any DB permission level) ───────────────────────────────
 router.post('/queries/:id/run', requireDbAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const q = await SavedQuery.findById(req.params.id).lean();
+    const userId   = req.session.user.id;
+    const tenantId = req.session.user.tenant_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
 
     const isOwner  = q.created_by.toString() === userId;
     const isShared = (q.shared_with || []).some(id => id.toString() === userId);
-    if (!isOwner && !isShared && !q.is_public) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
+    if (!isOwner && !isShared && !q.is_public) return res.status(403).json({ error: 'Access denied.' });
 
     const result = await req.adapter.query(q.sql);
     res.json(result);
@@ -177,31 +161,25 @@ router.post('/queries/:id/run', requireDbAuth, async (req, res) => {
   }
 });
 
-// ── Share settings (owner only) ───────────────────────────────────────────────
-// PUT /api/queries/:id/share
-// body: { isPublic: bool, usernames: string[] }
 router.put('/queries/:id/share', requireDbAuth, async (req, res) => {
   try {
-    const userId = req.session.user.id;
-    const q = await SavedQuery.findById(req.params.id).lean();
+    const userId   = req.session.user.id;
+    const tenantId = req.session.user.tenant_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
       return res.status(403).json({ error: 'Only the owner can change sharing settings.' });
     }
 
     const { isPublic, usernames = [] } = req.body;
-
-    // Resolve usernames → user IDs
     let sharedWithIds = [];
     if (Array.isArray(usernames) && usernames.length > 0) {
       const cleanNames = [...new Set(usernames.map(u => u.trim()).filter(Boolean))];
       const users = await User.find(
-        { username: { $in: cleanNames } },
+        { username: { $in: cleanNames }, tenant_id: tenantId },
         '_id username'
       ).lean();
-      sharedWithIds = users
-        .filter(u => u._id.toString() !== userId)  // don't share with yourself
-        .map(u => u._id);
+      sharedWithIds = users.filter(u => u._id.toString() !== userId).map(u => u._id);
     }
 
     await SavedQuery.findByIdAndUpdate(req.params.id, {

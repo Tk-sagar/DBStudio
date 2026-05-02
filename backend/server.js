@@ -8,7 +8,7 @@ const compression = require('compression');
 const path        = require('path');
 const fs          = require('fs');
 
-const { connect: connectMongo, User, SavedConnection, ConnectionGrant, UserConnectionPin } = require('./db/app');
+const { connect: connectMongo, Tenant, User, SavedConnection, ConnectionGrant, UserConnectionPin } = require('./db/app');
 const { decrypt }       = require('./utils/crypto');
 const { createAdapter } = require('./adapters');
 const registry      = require('./adapters/registry');
@@ -20,6 +20,7 @@ const authRouter    = require('./routes/auth');
 const adminRouter   = require('./routes/admin');
 const myConnsRouter    = require('./routes/userConnections');
 const savedQueriesRouter = require('./routes/savedQueries');
+const superAdminRouter = require('./routes/superAdmin');
 
 const IS_PROD       = process.env.NODE_ENV === 'production';
 const PORT          = process.env.PORT || 5001;
@@ -69,10 +70,12 @@ async function getInitialData(req) {
       if (connId === '__direct__') continue;
 
       const conn = await SavedConnection.findById(connId).lean();
-      if (!conn) { await UserConnectionPin.deleteOne({ _id: pin._id }); continue; }
+      if (!conn || (role !== 'super_admin' && user.tenant_id && conn.tenant_id?.toString() !== user.tenant_id)) {
+        await UserConnectionPin.deleteOne({ _id: pin._id }); continue;
+      }
 
       let permission = 'full';
-      if (role !== 'admin') {
+      if (role === 'user') {
         const grant = await ConnectionGrant.findOne({ connection_id: connId, user_id: userId }).lean();
         if (!grant) { await UserConnectionPin.deleteOne({ _id: pin._id }); continue; }
         permission = grant.permission;
@@ -216,6 +219,7 @@ async function main() {
   app.use('/api', queryRouter);
   app.use('/api', rowsRouter);
   app.use('/api', savedQueriesRouter);
+  app.use('/api', superAdminRouter);
 
   // Health check — no internal details
   app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -238,6 +242,11 @@ async function main() {
 
         const { render } = await vite.ssrLoadModule('/src/entry-server.jsx');
         const initialData = await getInitialData(req);
+        try {
+          const u = new URL(req.originalUrl, 'http://localhost');
+          const inviteToken = u.searchParams.get('invite');
+          if (inviteToken) initialData.inviteToken = inviteToken;
+        } catch (_) {}
         const appHtml     = render(initialData);
 
         const html = template
@@ -263,6 +272,11 @@ async function main() {
     app.use(async (req, res, next) => {
       try {
         const initialData = await getInitialData(req);
+        try {
+          const u = new URL(req.originalUrl, 'http://localhost');
+          const inviteToken = u.searchParams.get('invite');
+          if (inviteToken) initialData.inviteToken = inviteToken;
+        } catch (_) {}
         const appHtml     = render(initialData);
 
         const html = template
