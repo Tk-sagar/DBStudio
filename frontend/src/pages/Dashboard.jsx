@@ -1,15 +1,16 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Navbar from '../components/Navbar.jsx';
 import Sidebar from '../components/Sidebar.jsx';
 import TableGrid from '../components/TableGrid.jsx';
 import TableStructure from '../components/TableStructure.jsx';
+import QueriesPage from './QueriesPage.jsx';
 
 const SqlEditor = lazy(() => import('../components/SqlEditor.jsx'));
 
 const STORAGE_KEY_TABLE = 'db_selectedTable';
 const STORAGE_KEY_VIEW  = 'db_activeView';
 
-export default function Dashboard({ dbInfo, dbPermission, initialTables, user, onDisconnect, onLogout, onAdmin }) {
+export default function Dashboard({ dbInfo, dbPermission, initialTables, user, onDisconnect, onLogout, onAdmin, openConnections, activeConnId, connectingId, onSwitchConnection, onCloseConnection, onAddConnection }) {
   // typeof window guard: sessionStorage doesn't exist in Node.js during SSR
   const [selectedTable, setSelectedTable] = useState(
     () => typeof window !== 'undefined' ? (sessionStorage.getItem(STORAGE_KEY_TABLE) || null) : null
@@ -17,9 +18,18 @@ export default function Dashboard({ dbInfo, dbPermission, initialTables, user, o
   const [activeView, setActiveView] = useState(() => {
     if (typeof window === 'undefined') return null;
     const saved = sessionStorage.getItem(STORAGE_KEY_VIEW);
-    if (saved === 'sql' && dbPermission !== 'full') return null;
     return saved || (dbPermission === 'full' ? 'sql' : null);
   });
+
+  // Reset view when switching connections
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    setSelectedTable(null);
+    setActiveView(dbPermission === 'full' ? 'sql' : null);
+    sessionStorage.removeItem(STORAGE_KEY_TABLE);
+    sessionStorage.removeItem(STORAGE_KEY_VIEW);
+  }, [activeConnId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistView = (table, view) => {
     if (table) sessionStorage.setItem(STORAGE_KEY_TABLE, table);
@@ -45,29 +55,54 @@ export default function Dashboard({ dbInfo, dbPermission, initialTables, user, o
     onDisconnect();
   };
 
+  // From QueriesPage: open a query in the SQL editor and auto-run it
+  const handleOpenInEditor = (query) => {
+    handleViewChange('sql');
+    if (query?.id) sessionStorage.setItem('db_pendingQuery', JSON.stringify(query));
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#09090b] text-zinc-100 font-sans">
-      <Navbar dbInfo={dbInfo} user={user} onDisconnect={handleDisconnect} onLogout={onLogout} onAdmin={onAdmin} />
+      <Navbar
+        dbInfo={dbInfo}
+        user={user}
+        onDisconnect={handleDisconnect}
+        onLogout={onLogout}
+        onAdmin={onAdmin}
+        openConnections={openConnections}
+        activeConnId={activeConnId}
+        connectingId={connectingId}
+        onSwitchConnection={onSwitchConnection}
+        onCloseConnection={onCloseConnection}
+        onAddConnection={onAddConnection}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
+          key={activeConnId}
           selectedTable={selectedTable}
           onTableSelect={handleTableSelect}
           onSqlOpen={() => handleViewChange('sql')}
+          onQueriesOpen={() => handleViewChange('queries')}
           activeView={activeView}
           initialTables={initialTables}
           dbPermission={dbPermission}
         />
 
         <main className="flex-1 overflow-auto bg-[#09090b]">
+          {/* Saved Queries dashboard */}
+          {activeView === 'queries' && (
+            <QueriesPage onOpenInEditor={handleOpenInEditor} />
+          )}
+
           {/* SQL Editor */}
-          {activeView === 'sql' && dbPermission === 'full' && (
+          {activeView === 'sql' && (
             <Suspense fallback={
               <div className="flex items-center justify-center h-full">
                 <span className="w-5 h-5 border-2 border-white/10 border-t-violet-500 rounded-full animate-spin-fast" />
               </div>
             }>
-              <SqlEditor user={user} />
+              <SqlEditor user={user} dbPermission={dbPermission} />
             </Suspense>
           )}
 
@@ -100,7 +135,7 @@ export default function Dashboard({ dbInfo, dbPermission, initialTables, user, o
           )}
 
           {/* Empty state */}
-          {activeView !== 'sql' && !selectedTable && (
+          {activeView !== 'sql' && activeView !== 'queries' && !selectedTable && (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="w-14 h-14 rounded-2xl bg-[#111113] border border-white/[0.07] flex items-center justify-center mx-auto mb-5">

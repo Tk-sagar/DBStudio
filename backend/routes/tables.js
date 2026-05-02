@@ -22,6 +22,29 @@ router.get('/table/:name/structure', auth, async (req, res) => {
   }
 });
 
+// ── Export all rows (no pagination cap) ──────────────────────────────────────
+router.get('/table/:name/export', auth, async (req, res) => {
+  try {
+    const orderBy   = req.query.orderBy  || null;
+    const orderDir  = req.query.orderDir === 'DESC' ? 'DESC' : 'ASC';
+    const search    = req.query.search   || '';
+    const searchFields = req.query.searchField
+      ? [].concat(req.query.searchField).filter(Boolean)
+      : [];
+    let filters = [];
+    if (req.query.filters) {
+      try { filters = JSON.parse(req.query.filters); } catch {}
+    }
+
+    const result = await req.adapter.getRows(req.params.name, 1, 100_000, {
+      orderBy, orderDir, search, searchFields, filters,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.get('/table/:name', auth, async (req, res) => {
   try {
     const page    = parseInt(req.query.page)  || 1;

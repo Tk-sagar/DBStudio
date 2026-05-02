@@ -3,17 +3,18 @@ const router         = express.Router();
 const { SavedQuery, User } = require('../db/app');
 const requireAppAuth = require('../middleware/requireAppAuth');
 const requireDbAuth  = require('../middleware/auth');
+const requirePerm    = require('../middleware/requirePerm');
 
 router.use(requireAppAuth);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// sql is intentionally omitted — fetch via GET /queries/:id when needed
 function safeQuery(q, currentUserId) {
   return {
     id:          q._id.toString(),
     name:        q.name,
     description: q.description || '',
-    sql:         q.sql,
     is_public:   q.is_public,
     is_owner:    q.created_by?._id
                    ? q.created_by._id.toString() === currentUserId
@@ -27,15 +28,52 @@ function safeQuery(q, currentUserId) {
   };
 }
 
-// ── List — own + shared with me + public ──────────────────────────────────────
+// ── Single query with SQL (full permission only) ──────────────────────────────
+router.get('/queries/:id', requireDbAuth, requirePerm('full'), async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const q = await SavedQuery.findById(req.params.id)
+      .populate('created_by', 'username')
+      .populate('shared_with', 'username')
+      .lean();
+    if (!q) return res.status(404).json({ error: 'Query not found.' });
+
+    const isOwner  = q.created_by?._id
+      ? q.created_by._id.toString() === userId
+      : q.created_by?.toString() === userId;
+    const isShared = (q.shared_with || []).some(u => (u._id || u).toString() === userId);
+    if (!isOwner && !isShared && !q.is_public) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    res.json({ query: { ...safeQuery(q, userId), sql: q.sql } });
+  } catch (err) {
+    console.error('[queries/:id GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ── List — own + shared with me + public, scoped to active connection ─────────
 router.get('/queries', requireDbAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
+    const connId = req.session.activeConnId || null;
+
+    // Strict connection scope: only show queries saved on this exact connection
+    const connScope = connId
+      ? { connection_id: connId }
+      : { $or: [{ connection_id: null }, { connection_id: { $exists: false } }] };
+
     const queries = await SavedQuery.find({
-      $or: [
-        { created_by: userId },
-        { shared_with: userId },
-        { is_public: true },
+      $and: [
+        {
+          $or: [
+            { created_by: userId },
+            { shared_with: userId },
+            { is_public: true },
+          ],
+        },
+        ...(Object.keys(connScope).length ? [connScope] : []),
       ],
     })
       .sort({ updated_at: -1 })
@@ -59,10 +97,11 @@ router.post('/queries', requireDbAuth, async (req, res) => {
     if (!sql?.trim())   return res.status(400).json({ error: 'SQL is required.' });
 
     const q = await SavedQuery.create({
-      name: name.trim(),
-      description: description?.trim() || '',
-      sql: sql.trim(),
-      created_by: req.session.user.id,
+      name:          name.trim(),
+      description:   description?.trim() || '',
+      sql:           sql.trim(),
+      created_by:    req.session.user.id,
+      connection_id: req.session.activeConnId || null,
     });
 
     res.status(201).json({ id: q._id.toString(), name: q.name });
@@ -114,6 +153,27 @@ router.delete('/queries/:id', requireDbAuth, async (req, res) => {
   } catch (err) {
     console.error('[queries DELETE]', err.message);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ── Run a saved query (any DB permission level) ───────────────────────────────
+router.post('/queries/:id/run', requireDbAuth, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const q = await SavedQuery.findById(req.params.id).lean();
+    if (!q) return res.status(404).json({ error: 'Query not found.' });
+
+    const isOwner  = q.created_by.toString() === userId;
+    const isShared = (q.shared_with || []).some(id => id.toString() === userId);
+    if (!isOwner && !isShared && !q.is_public) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const result = await req.adapter.query(q.sql);
+    res.json(result);
+  } catch (err) {
+    console.error('[queries/run]', err.message);
+    res.status(400).json({ error: err.message });
   }
 });
 

@@ -14,18 +14,22 @@ function Spinner() {
 }
 
 export default function App({ initialData }) {
-  // When initialData is provided by SSR, skip the bootstrap API calls entirely
-  const [loading,      setLoading]      = useState(!initialData);
-  const [needsSetup,   setNeedsSetup]   = useState(initialData?.needsSetup   ?? false);
-  const [user,         setUser]         = useState(initialData?.user         ?? null);
-  const [dbConnected,  setDbConnected]  = useState(initialData?.dbConnected  ?? false);
-  const [dbInfo,       setDbInfo]       = useState(initialData?.dbInfo       ?? null);
-  const [dbPermission, setDbPermission] = useState(initialData?.dbPermission ?? null);
-  const [tables,       setTables]       = useState(initialData?.tables       ?? []);
-  const [showAdmin,    setShowAdmin]    = useState(false);
+  const [loading,         setLoading]         = useState(!initialData);
+  const [needsSetup,      setNeedsSetup]      = useState(initialData?.needsSetup   ?? false);
+  const [user,            setUser]            = useState(initialData?.user         ?? null);
+  const [dbConnected,     setDbConnected]     = useState(
+    (initialData?.dbConnected ?? false) || (initialData?.openConnections?.length > 0)
+  );
+  const [dbInfo,          setDbInfo]          = useState(initialData?.dbInfo       ?? null);
+  const [dbPermission,    setDbPermission]    = useState(initialData?.dbPermission ?? null);
+  const [tables,          setTables]          = useState(initialData?.tables       ?? []);
+  const [openConnections, setOpenConnections] = useState(initialData?.openConnections ?? []);
+  const [activeConnId,    setActiveConnId]    = useState(initialData?.activeConnId ?? null);
+  const [connectingId,    setConnectingId]    = useState(null);
+  const [showAdmin,       setShowAdmin]       = useState(false);
+  const [showPicker,      setShowPicker]      = useState(false);
 
   useEffect(() => {
-    // SSR already resolved the session state — no bootstrap calls needed
     if (initialData) return;
 
     api.get('/auth/setup-required')
@@ -37,8 +41,12 @@ export default function App({ initialData }) {
         if (!res) return;
         if (res.data.user) {
           setUser(res.data.user);
-          if (res.data.dbConnected) {
+          if (res.data.openConnections?.length) {
+            setOpenConnections(res.data.openConnections);
+            setActiveConnId(res.data.activeConnId || null);
             setDbConnected(true);
+          }
+          if (res.data.dbConnected) {
             setDbInfo(res.data.dbInfo);
             setDbPermission(res.data.dbPermission || 'full');
             setTables(res.data.tables || []);
@@ -54,18 +62,72 @@ export default function App({ initialData }) {
     setNeedsSetup(false);
   };
 
-  const handleConnect = ({ dbInfo, dbPermission, tables }) => {
+  // Called whenever a connection is made (initial or additional)
+  const handleConnect = ({ connId, dbInfo, dbPermission, tables }) => {
     setDbConnected(true);
     setDbInfo(dbInfo);
     setDbPermission(dbPermission || 'full');
     setTables(tables || []);
+    setActiveConnId(connId);
+    setOpenConnections(prev => {
+      const entry = { id: connId, name: dbInfo.name, type: dbInfo.type, permission: dbPermission || 'full', dbInfo };
+      const idx   = prev.findIndex(c => c.id === connId);
+      if (idx >= 0) return prev.map((c, i) => i === idx ? entry : c);
+      return [...prev, entry];
+    });
+    setShowPicker(false);
   };
 
+  // Switch to an already-open connection
+  const handleSwitchConnection = async (connId) => {
+    if (connId === activeConnId) return;
+    setConnectingId(connId);
+    try {
+      const res = await api.post(`/my/connections/${connId}/activate`);
+      setDbConnected(true);
+      setActiveConnId(connId);
+      setDbInfo(res.data.dbInfo);
+      setDbPermission(res.data.dbPermission);
+      setTables(res.data.tables || []);
+    } catch (err) {
+      console.error('Switch connection failed', err);
+    } finally {
+      setConnectingId(null);
+    }
+  };
+
+  // Close a specific open connection
+  const handleCloseConnection = async (connId) => {
+    try {
+      const res        = await api.delete(`/my/connections/${connId}/disconnect`);
+      const newOpen    = openConnections.filter(c => c.id !== connId);
+      setOpenConnections(newOpen);
+
+      if (res.data.activeConnId) {
+        setActiveConnId(res.data.activeConnId);
+        const newActive = newOpen.find(c => c.id === res.data.activeConnId);
+        if (newActive) { setDbInfo(newActive.dbInfo); setDbPermission(newActive.permission); }
+        setTables(res.data.tables || []);
+      } else {
+        setDbConnected(false);
+        setActiveConnId(null);
+        setDbInfo(null);
+        setDbPermission(null);
+        setTables([]);
+      }
+    } catch (err) {
+      console.error('Close connection failed', err);
+    }
+  };
+
+  // Disconnect all connections
   const handleDisconnect = () => {
     setDbConnected(false);
     setDbInfo(null);
     setDbPermission(null);
     setTables([]);
+    setOpenConnections([]);
+    setActiveConnId(null);
   };
 
   const handleLogout = async () => {
@@ -75,7 +137,10 @@ export default function App({ initialData }) {
     setDbInfo(null);
     setDbPermission(null);
     setTables([]);
+    setOpenConnections([]);
+    setActiveConnId(null);
     setShowAdmin(false);
+    setShowPicker(false);
   };
 
   if (loading) return <Spinner />;
@@ -100,14 +165,37 @@ export default function App({ initialData }) {
   }
 
   return (
-    <Dashboard
-      dbInfo={dbInfo}
-      dbPermission={dbPermission}
-      initialTables={tables}
-      user={user}
-      onDisconnect={handleDisconnect}
-      onLogout={handleLogout}
-      onAdmin={() => setShowAdmin(true)}
-    />
+    <>
+      <Dashboard
+        dbInfo={dbInfo}
+        dbPermission={dbPermission}
+        initialTables={tables}
+        user={user}
+        openConnections={openConnections}
+        activeConnId={activeConnId}
+        connectingId={connectingId}
+        onDisconnect={handleDisconnect}
+        onLogout={handleLogout}
+        onAdmin={() => setShowAdmin(true)}
+        onSwitchConnection={handleSwitchConnection}
+        onCloseConnection={handleCloseConnection}
+        onAddConnection={() => setShowPicker(true)}
+      />
+
+      {/* Add-connection overlay */}
+      {showPicker && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center overflow-auto py-10 px-4">
+          <div className="w-full max-w-[540px]">
+            <ConnectionPicker
+              user={user}
+              onConnect={handleConnect}
+              onAdmin={() => { setShowPicker(false); setShowAdmin(true); }}
+              onLogout={handleLogout}
+              onClose={() => setShowPicker(false)}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

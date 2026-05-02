@@ -18,13 +18,23 @@ function SqlIcon({ active }) {
   );
 }
 
-export default function Sidebar({ selectedTable, onTableSelect, onSqlOpen, activeView, initialTables, dbPermission }) {
+function QueriesIcon({ active }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" className={active ? 'text-violet-400' : 'text-zinc-600'}>
+      <rect x="0.5" y="0.5" width="12" height="12" rx="2.5" stroke="currentColor" strokeWidth="1"/>
+      <path d="M3 4.5h7M3 6.5h5M3 8.5h3" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export default function Sidebar({ selectedTable, onTableSelect, onSqlOpen, onQueriesOpen, activeView, initialTables, dbPermission }) {
   const [tables,  setTables]  = useState(initialTables || []);
   const [loading, setLoading] = useState(!initialTables?.length);
   const [error,   setError]   = useState('');
   const [search,  setSearch]  = useState('');
 
-  const canUseSql = dbPermission === 'full' || dbPermission == null;
+  const canUseSql = true;
+  const isFull    = dbPermission === 'full' || dbPermission == null;
 
   useEffect(() => {
     if (initialTables?.length) return;
@@ -56,19 +66,32 @@ export default function Sidebar({ selectedTable, onTableSelect, onSqlOpen, activ
         </div>
       </div>
 
-      {/* SQL Editor button */}
+      {/* Nav buttons */}
       {canUseSql && (
-        <div className="px-2.5 pb-2">
+        <div className="px-2.5 pb-2 space-y-0.5">
+          {isFull && (
+            <button
+              onClick={onSqlOpen}
+              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center gap-2 transition-all font-medium ${
+                activeView === 'sql'
+                  ? 'bg-violet-500/12 text-violet-300 border border-violet-500/25'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'
+              }`}
+            >
+              <SqlIcon active={activeView === 'sql'} />
+              SQL Editor
+            </button>
+          )}
           <button
-            onClick={onSqlOpen}
+            onClick={onQueriesOpen}
             className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center gap-2 transition-all font-medium ${
-              activeView === 'sql'
+              activeView === 'queries'
                 ? 'bg-violet-500/12 text-violet-300 border border-violet-500/25'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'
             }`}
           >
-            <SqlIcon active={activeView === 'sql'} />
-            SQL Editor
+            <QueriesIcon active={activeView === 'queries'} />
+            Saved Queries
           </button>
         </div>
       )}

@@ -1,6 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client.js';
 
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M1.5 7.5s2.5-4.5 6-4.5 6 4.5 6 4.5-2.5 4.5-6 4.5-6-4.5-6-4.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+      <circle cx="7.5" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.25"/>
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M1.5 7.5s2.5-4.5 6-4.5 6 4.5 6 4.5-2.5 4.5-6 4.5-6-4.5-6-4.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+      <circle cx="7.5" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.25"/>
+      <path d="M2 2l11 11" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function generatePassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+  const arr = new Uint8Array(12);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => chars[b % chars.length]).join('');
+}
+
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const input   = 'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-700 transition-all';
 const select  = input + ' cursor-pointer';
@@ -59,15 +81,15 @@ function RoleBadge({ role }) {
 
 // ── Users Tab ─────────────────────────────────────────────────────────────────
 function UsersTab({ currentUserId }) {
-  const [users,    setUsers]    = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState('');
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [editUser, setEditUser] = useState(null);
-  const [tmpPwd,   setTmpPwd]   = useState(null);
-  const [form,     setForm]     = useState({ username: '', password: '', role: 'user' });
-  const [saving,   setSaving]   = useState(false);
-  const [formErr,  setFormErr]  = useState('');
+  const [users,       setUsers]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [editUser,    setEditUser]    = useState(null);
+  const [form,        setForm]        = useState({ username: '', password: '', role: 'user' });
+  const [saving,      setSaving]      = useState(false);
+  const [formErr,     setFormErr]     = useState('');
+  const [resetModal,  setResetModal]  = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -117,13 +139,15 @@ function UsersTab({ currentUserId }) {
     }
   };
 
-  const handleTempPassword = async (id) => {
-    if (!window.confirm("This resets the user's password immediately. Continue?")) return;
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    const { id, password, isGenerated } = resetModal;
+    setResetModal(p => ({ ...p, saving: true, error: '' }));
     try {
-      const res = await api.post(`/admin/users/${id}/temp-password`);
-      setTmpPwd(res.data);
+      await api.put(`/admin/users/${id}`, { password });
+      setResetModal(p => ({ ...p, saving: false, done: true, generatedPwd: isGenerated ? password : null }));
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to generate temp password.');
+      setResetModal(p => ({ ...p, saving: false, error: err.response?.data?.error || 'Failed to reset password.' }));
     }
   };
 
@@ -174,9 +198,8 @@ function UsersTab({ currentUserId }) {
                         className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all"
                       >Edit</button>
                       <button
-                        onClick={() => handleTempPassword(u.id)}
+                        onClick={() => setResetModal({ id: u.id, username: u.username, password: '', showPwd: false, isGenerated: false, saving: false, error: '', done: false, generatedPwd: null })}
                         className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-amber-500/10 text-zinc-500 hover:text-amber-400 border border-white/[0.08] hover:border-amber-500/25 rounded-lg font-medium transition-all"
-                        title="Generate a temporary password"
                       >Reset Pwd</button>
                       {u.id !== currentUserId && (
                         <button
@@ -196,24 +219,68 @@ function UsersTab({ currentUserId }) {
         </div>
       )}
 
-      {/* Temp password modal */}
-      {tmpPwd && (
-        <Modal title="Temporary Password" onClose={() => setTmpPwd(null)}>
-          <div className="space-y-4">
-            <p className="text-zinc-400 text-sm leading-relaxed">
-              Password reset for <span className="text-zinc-200 font-mono font-semibold">{tmpPwd.username}</span>. Share this securely — it won't be shown again.
-            </p>
-            <div className="bg-[#0d0d10] border border-white/[0.08] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
-              <span className="text-violet-300 font-mono text-sm tracking-widest select-all">{tmpPwd.tempPassword}</span>
+      {/* Reset password modal */}
+      {resetModal && (
+        <Modal title={`Reset password — ${resetModal.username}`} onClose={() => setResetModal(null)}>
+          {resetModal.done ? (
+            <div className="space-y-4">
+              <p className="text-zinc-400 text-sm leading-relaxed">
+                Password reset for <span className="text-zinc-200 font-mono font-semibold">{resetModal.username}</span>.
+              </p>
+              {resetModal.generatedPwd && (
+                <>
+                  <p className="text-zinc-600 text-xs">Generated password — share securely, it won't be shown again:</p>
+                  <div className="bg-[#0d0d10] border border-white/[0.08] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
+                    <span className="text-violet-300 font-mono text-sm tracking-widest select-all">{resetModal.generatedPwd}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(resetModal.generatedPwd)}
+                      className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 text-white rounded-lg font-medium transition-all shrink-0"
+                    >Copy</button>
+                  </div>
+                </>
+              )}
+              <button type="button" onClick={() => setResetModal(null)} className={btnSec + ' w-full text-center'}>Done</button>
+            </div>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className={label}>New password</label>
+                <div className="relative">
+                  <input
+                    autoFocus
+                    type={resetModal.showPwd ? 'text' : 'password'}
+                    className={input + ' pr-10'}
+                    value={resetModal.password}
+                    onChange={e => setResetModal(p => ({ ...p, password: e.target.value, isGenerated: false, error: '' }))}
+                    placeholder="At least 8 characters"
+                    required
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setResetModal(p => ({ ...p, showPwd: !p.showPwd }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                  >
+                    <EyeIcon open={resetModal.showPwd} />
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(tmpPwd.tempPassword)}
-                className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 text-white rounded-lg font-medium transition-all shrink-0"
-              >Copy</button>
-            </div>
-            <p className="text-zinc-700 text-xs">The user should log in and change this password immediately.</p>
-            <button type="button" onClick={() => setTmpPwd(null)} className={btnSec + ' w-full text-center'}>Done</button>
-          </div>
+                onClick={() => {
+                  const pwd = generatePassword();
+                  setResetModal(p => ({ ...p, password: pwd, showPwd: true, isGenerated: true }));
+                }}
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium -mt-2"
+              >Generate random password</button>
+              <ErrorBanner msg={resetModal.error} onDismiss={() => setResetModal(p => ({ ...p, error: '' }))} />
+              <div className="flex gap-2.5 pt-1">
+                <button type="submit" disabled={resetModal.saving} className={btnPrim}>{resetModal.saving ? 'Resetting…' : 'Reset password'}</button>
+                <button type="button" onClick={() => setResetModal(null)} className={btnSec}>Cancel</button>
+              </div>
+            </form>
+          )}
         </Modal>
       )}
 
@@ -407,7 +474,7 @@ function ConnectionsTab() {
   const [saving,      setSaving]      = useState(false);
   const [formErr,     setFormErr]     = useState('');
 
-  const emptyForm = { name: '', type: 'mysql', host: 'localhost', port: '3306', username: '', password: '', database: '' };
+  const emptyForm = { name: '', type: 'mysql', host: 'localhost', port: '3306', username: '', password: '', database: '', use_ssl: false };
   const [form, setForm] = useState(emptyForm);
 
   const load = useCallback(() => {
@@ -501,6 +568,17 @@ function ConnectionsTab() {
         <input className={input} value={values.database} onChange={e => onChange('database', e.target.value)}
           placeholder={isSQLite(values.type) ? '/data/mydb.sqlite' : 'mydb'} required />
       </div>
+      {!isSQLite(values.type) && (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={values.use_ssl || false}
+            onChange={e => onChange('use_ssl', e.target.checked)}
+            className="w-4 h-4 rounded border border-white/[0.12] bg-[#0d0d10] accent-violet-500 cursor-pointer"
+          />
+          <span className="text-sm text-zinc-400">Use SSL / TLS</span>
+        </label>
+      )}
       <ErrorBanner msg={formErr} onDismiss={() => setFormErr('')} />
       <div className="flex gap-2.5 pt-1">
         <button type="submit" disabled={saving} className={btnPrim}>{saving ? 'Saving…' : submitLabel}</button>
@@ -595,7 +673,7 @@ function ConnectionsTab() {
                       className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all disabled:opacity-50"
                     >{testing === conn.id ? 'Testing…' : 'Test'}</button>
                     <button
-                      onClick={() => { setEditConn({ id: conn.id, name: conn.name, type: conn.type, host: conn.host || '', port: conn.port ? String(conn.port) : '', username: conn.db_username || '', password: '', database: conn.database_name }); setFormErr(''); }}
+                      onClick={() => { setEditConn({ id: conn.id, name: conn.name, type: conn.type, host: conn.host || '', port: conn.port ? String(conn.port) : '', username: conn.db_username || '', password: '', database: conn.database_name, use_ssl: conn.use_ssl ?? false }); setFormErr(''); }}
                       className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all"
                     >Edit</button>
                     <button
@@ -682,8 +760,8 @@ export default function AdminPanel({ user, onClose, onLogout }) {
           ))}
         </div>
 
-        {tab === 'users'       && <UsersTab currentUserId={user.id} />}
-        {tab === 'connections' && <ConnectionsTab />}
+        {tab === 'users'        && <UsersTab currentUserId={user.id} />}
+        {tab === 'connections'  && <ConnectionsTab />}
       </div>
     </div>
   );

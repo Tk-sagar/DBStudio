@@ -24,6 +24,7 @@ function safeConn(sc, extra = {}) {
     port:          sc.port   ?? null,
     db_username:   sc.db_username || '',
     database_name: sc.database_name,
+    use_ssl:       sc.use_ssl ?? false,
     created_at:    sc.created_at,
     ...extra,
   };
@@ -70,7 +71,7 @@ router.put('/admin/users/:id', async (req, res) => {
       if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
       await User.findByIdAndUpdate(id, { role });
     }
-    if (password !== undefined) {
+    if (password !== undefined && password !== '') {
       if (password.length < 8)        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
       if (password.length > MAX_PASSWORD) return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -135,7 +136,7 @@ router.get('/admin/connections', async (_req, res) => {
 
 router.post('/admin/connections', async (req, res) => {
   try {
-    const { name, type, host, port, username: dbUser, password, database } = req.body;
+    const { name, type, host, port, username: dbUser, password, database, use_ssl } = req.body;
     if (!name?.trim())              return res.status(400).json({ error: 'Connection name is required.' });
     if (name.trim().length > MAX_NAME) return res.status(400).json({ error: `Name must be at most ${MAX_NAME} characters.` });
     if (!type)                      return res.status(400).json({ error: 'Database type is required.' });
@@ -152,6 +153,7 @@ router.post('/admin/connections', async (req, res) => {
       db_username: dbUser || '',
       db_password_enc: enc,
       database_name: database,
+      use_ssl: !!use_ssl,
       created_by: req.session.user.id,
     });
 
@@ -174,6 +176,7 @@ router.put('/admin/connections/:id', async (req, res) => {
     }
     const enc = password !== undefined ? encrypt(password) : row.db_password_enc;
 
+    const { use_ssl } = req.body;
     await SavedConnection.findByIdAndUpdate(id, {
       name:            name     ?? row.name,
       type:            type     ?? row.type,
@@ -182,6 +185,7 @@ router.put('/admin/connections/:id', async (req, res) => {
       db_username:     dbUser   ?? row.db_username,
       db_password_enc: enc,
       database_name:   database ?? row.database_name,
+      use_ssl:         use_ssl !== undefined ? !!use_ssl : row.use_ssl,
     });
     res.json({ success: true });
   } catch (err) {
@@ -215,6 +219,7 @@ router.post('/admin/connections/:id/test', async (req, res) => {
       username: row.db_username,
       password: decrypt(row.db_password_enc),
       database: row.database_name,
+      ssl:      row.use_ssl ?? false,
     });
     await adapter.getTables();
     await adapter.close();

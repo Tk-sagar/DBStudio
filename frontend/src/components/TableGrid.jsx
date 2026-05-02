@@ -5,6 +5,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import api from '../api/client.js';
+import { exportCsv, exportExcel } from '../utils/export.js';
 
 // ── Filter config (must be before buildSql) ───────────────────────────────────
 const OPERATORS = [
@@ -157,6 +158,99 @@ function SearchIcon() {
   );
 }
 
+// ── Table export menu ─────────────────────────────────────────────────────────
+function TableExportMenu({ tableName, data, total, appliedSearch, appliedSearchFields, appliedFilterRules, sorting }) {
+  const [open,        setOpen]        = useState(false);
+  const [exporting,   setExporting]   = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  // Use the dedicated export endpoint — no row cap, respects current filters
+  const fetchAll = async () => {
+    const qs = new URLSearchParams();
+    if (sorting[0]) { qs.set('orderBy', sorting[0].id); qs.set('orderDir', sorting[0].desc ? 'DESC' : 'ASC'); }
+    if (appliedSearch) {
+      qs.set('search', appliedSearch);
+      if (appliedSearchFields.length > 0) for (const f of appliedSearchFields) qs.append('searchField', f);
+    }
+    const validRules = appliedFilterRules.filter(r => r.field && (NO_VALUE_OPS.has(r.op) || r.value));
+    if (validRules.length > 0) qs.set('filters', JSON.stringify(validRules));
+    const res = await api.get(`/table/${tableName}/export?${qs}`);
+    return res.data.rows || data;
+  };
+
+  const handleExport = async (format) => {
+    setOpen(false);
+    setExporting(true);
+    try {
+      const rows = await fetchAll();
+      const filename = tableName;
+      if (format === 'csv')   exportCsv(rows, null, filename);
+      if (format === 'excel') exportExcel(rows, null, filename);
+    } catch (_) {}
+    finally { setExporting(false); }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={exporting}
+        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-[#0d0d10] border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 rounded-lg transition-all disabled:opacity-50"
+      >
+        {exporting ? (
+          <span className="w-3 h-3 border border-zinc-600 border-t-violet-500 rounded-full animate-spin-fast" />
+        ) : (
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 1v6M2.5 5l3 3 3-3M1 9h9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+        Export
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M1.5 2.5l2.5 3 2.5-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-40 bg-[#111113] border border-white/[0.08] rounded-xl shadow-xl overflow-hidden z-20">
+          {total > data.length && (
+            <div className="px-3 py-1.5 border-b border-white/[0.05]">
+              <p className="text-[10px] text-zinc-600">All {total.toLocaleString()} rows will be exported</p>
+            </div>
+          )}
+          <button
+            onClick={() => handleExport('csv')}
+            className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.05] flex items-center gap-2 transition-colors"
+          >
+            <svg width="11" height="13" viewBox="0 0 11 13" fill="none">
+              <rect x="0.5" y="0.5" width="10" height="12" rx="2" stroke="currentColor" strokeWidth="1"/>
+              <path d="M3 5h5M3 7.5h5M3 10h3" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+            </svg>
+            Export CSV
+          </button>
+          <div className="border-t border-white/[0.05]" />
+          <button
+            onClick={() => handleExport('excel')}
+            className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.05] flex items-center gap-2 transition-colors"
+          >
+            <svg width="11" height="13" viewBox="0 0 11 13" fill="none">
+              <rect x="0.5" y="0.5" width="10" height="12" rx="2" stroke="currentColor" strokeWidth="1"/>
+              <path d="M3 4.5l2 3-2 3M8 4.5l-2 3 2 3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Export Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TableGrid({ tableName, dbPermission }) {
   const canWrite = dbPermission !== 'read';
@@ -198,6 +292,12 @@ export default function TableGrid({ tableName, dbPermission }) {
   const [newRowData,  setNewRowData]  = useState({});
   const [saving,      setSaving]      = useState(false);
   const [actionError, setActionError] = useState('');
+
+  const columnNames = useMemo(() => {
+    if (structure.length > 0) return structure.map(s => s.name);
+    if (data.length > 0) return Object.keys(data[0]);
+    return [];
+  }, [structure, data]);
 
   const totalPages        = Math.ceil(total / limit) || 1;
   const activeFilterCount = appliedFilterRules.filter(r => r.field && (NO_VALUE_OPS.has(r.op) || r.value)).length;
@@ -304,12 +404,6 @@ export default function TableGrid({ tableName, dbPermission }) {
   const addFilterRule    = ()          => setFilterRules(p => [...p, newRule(columnNames[0] || '')]);
   const removeFilterRule = (id)        => setFilterRules(p => p.filter(r => r.id !== id));
   const updateFilterRule = (id, patch) => setFilterRules(p => p.map(r => r.id === id ? { ...r, ...patch } : r));
-
-  const columnNames = useMemo(() => {
-    if (structure.length > 0) return structure.map(s => s.name);
-    if (data.length > 0) return Object.keys(data[0]);
-    return [];
-  }, [structure, data]);
 
   const toggleSearchField = (col) => {
     setSearchFields(prev => {
@@ -525,8 +619,8 @@ export default function TableGrid({ tableName, dbPermission }) {
           </button>
         )}
 
-        {/* Count + new row */}
-        <div className="ml-auto flex items-center gap-3">
+        {/* Count + export + new row */}
+        <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-zinc-600 whitespace-nowrap">
             {total > 0 ? (
               <>
@@ -535,6 +629,19 @@ export default function TableGrid({ tableName, dbPermission }) {
               </>
             ) : '0 rows'}
           </span>
+
+          {data.length > 0 && (
+            <TableExportMenu
+              tableName={tableName}
+              data={data}
+              total={total}
+              appliedSearch={appliedSearch}
+              appliedSearchFields={appliedSearchFields}
+              appliedFilterRules={appliedFilterRules}
+              sorting={sorting}
+            />
+          )}
+
           {canWrite && (
             <button onClick={() => setShowAddForm(s => !s)}
               className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 text-white rounded-lg font-medium flex items-center gap-1.5 transition-all whitespace-nowrap">

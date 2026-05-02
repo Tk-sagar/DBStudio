@@ -27,7 +27,7 @@ function LogoMark() {
   );
 }
 
-export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout }) {
+export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, onClose }) {
   const [connections, setConnections] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [connecting,  setConnecting]  = useState(null);
@@ -47,15 +47,15 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout })
     setConnecting(id); setError('');
     try {
       const res = await api.post(`/my/connections/${id}/connect`);
-      onConnect({ dbInfo: res.data.dbInfo, dbPermission: res.data.dbPermission, tables: res.data.tables || [] });
+      onConnect({ connId: id, dbInfo: res.data.dbInfo, dbPermission: res.data.dbPermission, tables: res.data.tables || [] });
     } catch (err) {
       setError(err.response?.data?.error || 'Connection failed.');
       setConnecting(null);
     }
   };
 
-  const handleDirectConnect = (dbInfo, dbPermission, tables) => {
-    onConnect({ dbInfo, dbPermission: dbPermission || 'full', tables: tables || [] });
+  const handleDirectConnect = (dbInfo, dbPermission, tables, connId) => {
+    onConnect({ connId: connId || '__direct__', dbInfo, dbPermission: dbPermission || 'full', tables: tables || [] });
   };
 
   return (
@@ -75,12 +75,21 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout })
               Admin Panel
             </button>
           )}
-          <button
-            onClick={onLogout}
-            className="text-xs text-zinc-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all font-medium"
-          >
-            Log out
-          </button>
+          {onClose ? (
+            <button
+              onClick={onClose}
+              className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-all font-medium"
+            >
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={onLogout}
+              className="text-xs text-zinc-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all font-medium"
+            >
+              Log out
+            </button>
+          )}
         </div>
       </nav>
 
@@ -179,7 +188,7 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout })
                           </span>
                         </div>
                         <p className="text-zinc-600 text-xs font-mono truncate">
-                          {conn.host ? `${conn.host} / ${conn.database_name}` : conn.database_name}
+                          {conn.database_name}
                         </p>
                       </div>
 

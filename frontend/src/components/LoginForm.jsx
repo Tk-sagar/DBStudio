@@ -75,7 +75,7 @@ export default function LoginForm({ onConnect }) {
     try {
       const res = await api.post('/connect', form);
       if (wantSave) saveConnectionEntry(form, connName.trim() || autoName(form));
-      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables);
+      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables, res.data.connId);
     } catch (err) {
       setError(err.response?.data?.error || 'Connection failed. Check your credentials.');
     } finally {
@@ -97,7 +97,7 @@ export default function LoginForm({ onConnect }) {
     try {
       const res = await api.post('/connect', { type: conn.type, host: conn.host, port: conn.port,
         username: conn.username, password: conn.savedPassword, database: conn.database });
-      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables);
+      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables, res.data.connId);
     } catch (err) {
       handleSelectSaved(conn);
       setError(err.response?.data?.error || 'Quick connect failed.');

@@ -1,5 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../api/client.js';
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
+function EyeIcon({ open }) {
+  return open ? (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M1.5 7.5s2.5-4.5 6-4.5 6 4.5 6 4.5-2.5 4.5-6 4.5-6-4.5-6-4.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+      <circle cx="7.5" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.25"/>
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M1.5 7.5s2.5-4.5 6-4.5 6 4.5 6 4.5-2.5 4.5-6 4.5-6-4.5-6-4.5z" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round"/>
+      <circle cx="7.5" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.25"/>
+      <path d="M2 2l11 11" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+      <rect x="5" y="10" width="30" height="22" rx="3" stroke="#a78bfa" strokeWidth="1.5"/>
+      <path d="M5 13l15 10 15-10" stroke="#a78bfa" strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+// ── Shared styles ─────────────────────────────────────────────────────────────
 
 const inputCls = [
   'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl',
@@ -27,26 +63,245 @@ function LogoMark() {
   );
 }
 
+function ErrorBox({ msg }) {
+  if (!msg) return null;
+  return (
+    <div className="flex items-center gap-2 bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5">
+      <svg className="text-red-400 shrink-0" width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+        <path d="M6.5 4v3M6.5 9h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+      </svg>
+      <p className="text-red-400 text-xs">{msg}</p>
+    </div>
+  );
+}
+
+function SuccessBox({ msg }) {
+  if (!msg) return null;
+  return (
+    <div className="flex items-center gap-2 bg-emerald-500/[0.08] border border-emerald-500/20 rounded-xl px-3.5 py-2.5">
+      <svg className="text-emerald-400 shrink-0" width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+        <path d="M4 6.5l2 2 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      <p className="text-emerald-400 text-xs">{msg}</p>
+    </div>
+  );
+}
+
+// OTP digit input — single box with spacing
+function OtpInput({ value, onChange }) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      maxLength={6}
+      value={value}
+      onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+      placeholder="000000"
+      className={[
+        'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 rounded-xl',
+        'px-3.5 py-3 text-center text-2xl font-mono tracking-[0.5em] placeholder-zinc-700',
+        'focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15',
+        'transition-all duration-150',
+      ].join(' ')}
+    />
+  );
+}
+
+// ── Resend button with cooldown ───────────────────────────────────────────────
+
+function ResendButton({ userId, type, onSuccess, onError }) {
+  const [cooldown, setCooldown] = useState(0);
+  const [busy,     setBusy]     = useState(false);
+  const timerRef = useRef(null);
+
+  const startCooldown = (secs = 60) => {
+    setCooldown(secs);
+    timerRef.current = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  const handleResend = async () => {
+    setBusy(true);
+    try {
+      await api.post('/auth/resend-otp', { userId, type });
+      startCooldown(60);
+      onSuccess?.('Code resent — check your inbox.');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Failed to resend.';
+      const match = msg.match(/wait (\d+)s/);
+      if (match) startCooldown(parseInt(match[1]));
+      onError?.(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleResend}
+      disabled={busy || cooldown > 0}
+      className="text-xs text-zinc-500 hover:text-violet-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors"
+    >
+      {busy ? 'Sending…' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+    </button>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function AppLogin({ mode, onLogin }) {
   const isSetup = mode === 'setup';
-  const [tab,      setTab]      = useState('login');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
+
+  // Screen: 'form' | 'verify-email' | 'forgot-email' | 'forgot-reset'
+  const [screen,       setScreen]       = useState('form');
+  const [tab,          setTab]          = useState('login');
+
+  // Form fields
+  const [username,     setUsername]     = useState('');
+  const [email,        setEmail]        = useState('');
+  const [password,     setPassword]     = useState('');
+  const [confirm,      setConfirm]      = useState('');
+  const [showPwd,      setShowPwd]      = useState(false);
+  const [showConfirm,  setShowConfirm]  = useState(false);
+
+  // OTP / reset
+  const [otpValue,     setOtpValue]     = useState('');
+  const [newPwd,       setNewPwd]       = useState('');
+  const [newPwdConf,   setNewPwdConf]   = useState('');
+  const [showNewPwd,   setShowNewPwd]   = useState(false);
+  const [showNewConf,  setShowNewConf]  = useState(false);
+  const [pendingId,    setPendingId]    = useState('');   // userId awaiting OTP
+  const [pendingEmail, setPendingEmail] = useState('');   // email shown on OTP screen
+
+  // UI state
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [success,  setSuccess]  = useState('');
 
-  const switchTab = (t) => { setTab(t); setUsername(''); setPassword(''); setConfirm(''); setError(''); };
+  const clearMessages = () => { setError(''); setSuccess(''); };
 
-  const handleSubmit = async (e) => {
+  const switchTab = (t) => {
+    setTab(t);
+    setUsername(''); setEmail(''); setPassword(''); setConfirm('');
+    setShowPwd(false); setShowConfirm(false);
+    clearMessages();
+  };
+
+  const goBack = () => {
+    setScreen('form');
+    setOtpValue(''); setNewPwd(''); setNewPwdConf('');
+    setShowNewPwd(false); setShowNewConf(false);
+    clearMessages();
+  };
+
+  // ── Submit: login / register / setup ───────────────────────────────────────
+
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    clearMessages();
+    const isRegister = !isSetup && tab === 'register';
     if (isRegister && password !== confirm) return setError('Passwords do not match.');
     setLoading(true);
     try {
-      const endpoint = isSetup ? '/auth/setup' : tab === 'register' ? '/auth/register' : '/auth/login';
-      const res = await api.post(endpoint, { username: username.trim(), password });
+      if (isSetup) {
+        const res = await api.post('/auth/setup', { username: username.trim(), password });
+        onLogin(res.data.user);
+      } else if (isRegister) {
+        const res = await api.post('/auth/register', {
+          username: username.trim(),
+          email:    email.trim(),
+          password,
+        });
+        if (res.data.pendingVerification) {
+          setPendingId(res.data.userId);
+          setPendingEmail(email.trim());
+          setScreen('verify-email');
+        }
+      } else {
+        // Login — identifier can be username or email
+        const res = await api.post('/auth/login', { identifier: username.trim(), password });
+        if (res.data.pendingVerification) {
+          setPendingId(res.data.userId);
+          setPendingEmail(username.trim());
+          setScreen('verify-email');
+        } else {
+          onLogin(res.data.user);
+        }
+      }
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.pendingVerification) {
+        setPendingId(data.userId);
+        setPendingEmail(username.trim());
+        setScreen('verify-email');
+      } else {
+        setError(data?.error || 'Something went wrong.');
+      }
+    } finally { setLoading(false); }
+  };
+
+  // ── Submit: verify email OTP ────────────────────────────────────────────────
+
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault();
+    if (otpValue.length !== 6) return setError('Enter the 6-digit code from your email.');
+    clearMessages();
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/verify-email', { userId: pendingId, otp: otpValue });
       onLogin(res.data.user);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Invalid or expired code.');
+    } finally { setLoading(false); }
+  };
+
+  // ── Submit: forgot password — send OTP ─────────────────────────────────────
+
+  const handleForgotEmail = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return setError('Email is required.');
+    clearMessages();
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/forgot-password', { email: email.trim() });
+      if (res.data.userId) {
+        setPendingId(res.data.userId);
+        setPendingEmail(email.trim());
+        setScreen('forgot-reset');
+      } else {
+        // Email not found — still show generic message so we don't reveal existence
+        setSuccess('If an account with that email exists, a reset code was sent.');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Something went wrong.');
+    } finally { setLoading(false); }
+  };
+
+  // ── Submit: reset password with OTP ────────────────────────────────────────
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (otpValue.length !== 6) return setError('Enter the 6-digit reset code.');
+    if (!newPwd || newPwd.length < 8) return setError('Password must be at least 8 characters.');
+    if (newPwd !== newPwdConf) return setError('Passwords do not match.');
+    clearMessages();
+    setLoading(true);
+    try {
+      await api.post('/auth/reset-password', { userId: pendingId, otp: otpValue, newPassword: newPwd });
+      setScreen('form');
+      setTab('login');
+      setOtpValue(''); setNewPwd(''); setNewPwdConf('');
+      setSuccess('Password reset successfully. Sign in with your new password.');
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong.');
     } finally { setLoading(false); }
@@ -54,9 +309,10 @@ export default function AppLogin({ mode, onLogin }) {
 
   const isRegister = !isSetup && tab === 'register';
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-full bg-[#09090b] dot-grid flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/[0.06] blur-[120px]" />
       </div>
@@ -70,119 +326,334 @@ export default function AppLogin({ mode, onLogin }) {
           </div>
           <h1 className="text-zinc-100 text-xl font-semibold tracking-tight mb-1">DB Studio</h1>
           <p className="text-zinc-500 text-sm">
-            {isSetup ? 'Create your admin account' : isRegister ? 'Create a new account' : 'Sign in to your workspace'}
+            {isSetup
+              ? 'Create your admin account'
+              : screen === 'verify-email'
+              ? 'Verify your email'
+              : screen === 'forgot-email'
+              ? 'Reset your password'
+              : screen === 'forgot-reset'
+              ? 'Set a new password'
+              : isRegister
+              ? 'Create a new account'
+              : 'Sign in to your workspace'}
           </p>
         </div>
 
-        {/* Setup notice */}
-        {isSetup && (
-          <div className="flex items-start gap-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl px-4 py-3 mb-5">
-            <svg className="text-amber-400 shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-              <path d="M7 5.5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            <p className="text-amber-400/90 text-xs leading-relaxed">
-              First-time setup — this admin account manages all users and database connections.
-            </p>
-          </div>
-        )}
-
-        {/* Tab switcher */}
-        {!isSetup && (
-          <div className="flex bg-[#111113] border border-white/[0.07] rounded-xl p-1 mb-4">
-            {[['login', 'Sign in'], ['register', 'Register']].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => switchTab(key)}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                  tab === key
-                    ? 'bg-gradient-violet text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Card */}
-        <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Username</label>
-              <input
-                type="text"
-                autoComplete="username"
-                value={username}
-                onChange={e => { setUsername(e.target.value); setError(''); }}
-                placeholder="Enter username"
-                required
-                className={inputCls}
-              />
+        {/* ── Email verification screen ────────────────────────────────────── */}
+        {screen === 'verify-email' && (
+          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+            <div className="flex justify-center">
+              <MailIcon />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-zinc-200 text-sm font-medium">Check your inbox</p>
+              <p className="text-zinc-500 text-xs leading-relaxed">
+                We sent a 6-digit code to<br/>
+                <span className="text-zinc-300 font-medium">{pendingEmail}</span>
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
-              <input
-                type="password"
-                autoComplete={isRegister || isSetup ? 'new-password' : 'current-password'}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                placeholder={isRegister || isSetup ? 'At least 8 characters' : 'Enter password'}
-                required
-                className={inputCls}
-              />
-            </div>
-
-            {(isRegister || isSetup) && (
+            <form onSubmit={handleVerifyEmail} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm password</label>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Verification code</label>
+                <OtpInput value={otpValue} onChange={v => { setOtpValue(v); clearMessages(); }} />
+              </div>
+
+              <ErrorBox  msg={error}   />
+              <SuccessBox msg={success} />
+
+              <button
+                type="submit"
+                disabled={loading || otpValue.length !== 6}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {loading ? (
+                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Verifying…</>
+                ) : 'Verify email'}
+              </button>
+            </form>
+
+            <div className="flex items-center justify-between pt-1">
+              <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                <BackIcon /> Back
+              </button>
+              <ResendButton
+                userId={pendingId}
+                type="verify_email"
+                onSuccess={msg => setSuccess(msg)}
+                onError={msg => setError(msg)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Forgot password — enter email ────────────────────────────────── */}
+        {screen === 'forgot-email' && (
+          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
+            <form onSubmit={handleForgotEmail} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Account email</label>
                 <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirm}
-                  onChange={e => { setConfirm(e.target.value); setError(''); }}
-                  placeholder="Re-enter password"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); clearMessages(); }}
+                  placeholder="you@example.com"
                   required
                   className={inputCls}
                 />
               </div>
-            )}
 
-            {error && (
-              <div className="flex items-center gap-2 bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5">
-                <svg className="text-red-400 shrink-0" width="13" height="13" viewBox="0 0 13 13" fill="none">
-                  <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
-                  <path d="M6.5 4v3M6.5 9h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              <ErrorBox  msg={error}   />
+              <SuccessBox msg={success} />
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {loading ? (
+                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Sending…</>
+                ) : 'Send reset code'}
+              </button>
+            </form>
+
+            <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-4">
+              <BackIcon /> Back to sign in
+            </button>
+          </div>
+        )}
+
+        {/* ── Forgot password — OTP + new password ────────────────────────── */}
+        {screen === 'forgot-reset' && (
+          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+            <div className="flex justify-center">
+              <MailIcon />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-zinc-200 text-sm font-medium">Reset code sent</p>
+              <p className="text-zinc-500 text-xs">
+                Code sent to <span className="text-zinc-300 font-medium">{pendingEmail}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">6-digit reset code</label>
+                <OtpInput value={otpValue} onChange={v => { setOtpValue(v); clearMessages(); }} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">New password</label>
+                <div className="relative">
+                  <input
+                    type={showNewPwd ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={newPwd}
+                    onChange={e => { setNewPwd(e.target.value); clearMessages(); }}
+                    placeholder="At least 8 characters"
+                    required
+                    className={inputCls + ' pr-10'}
+                  />
+                  <button type="button" tabIndex={-1} onClick={() => setShowNewPwd(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <EyeIcon open={showNewPwd} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm new password</label>
+                <div className="relative">
+                  <input
+                    type={showNewConf ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={newPwdConf}
+                    onChange={e => { setNewPwdConf(e.target.value); clearMessages(); }}
+                    placeholder="Re-enter new password"
+                    required
+                    className={inputCls + ' pr-10'}
+                  />
+                  <button type="button" tabIndex={-1} onClick={() => setShowNewConf(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <EyeIcon open={showNewConf} />
+                  </button>
+                </div>
+              </div>
+
+              <ErrorBox msg={error} />
+
+              <button
+                type="submit"
+                disabled={loading || otpValue.length !== 6}
+                className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {loading ? (
+                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Resetting…</>
+                ) : 'Reset password'}
+              </button>
+            </form>
+
+            <div className="flex items-center justify-between pt-1">
+              <button type="button" onClick={goBack} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                <BackIcon /> Back
+              </button>
+              <ResendButton
+                userId={pendingId}
+                type="reset_password"
+                onSuccess={msg => setSuccess(msg)}
+                onError={msg => setError(msg)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Main form (login / register / setup) ─────────────────────────── */}
+        {screen === 'form' && (
+          <>
+            {isSetup && (
+              <div className="flex items-start gap-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl px-4 py-3 mb-5">
+                <svg className="text-amber-400 shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                  <path d="M7 5.5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 </svg>
-                <p className="text-red-400 text-xs">{error}</p>
+                <p className="text-amber-400/90 text-xs leading-relaxed">
+                  First-time setup — this admin account manages all users and database connections.
+                </p>
               </div>
             )}
 
-            {isRegister && (
-              <p className="text-zinc-600 text-xs leading-relaxed">
-                New accounts have <span className="text-zinc-500 font-medium">user</span> role. An admin must grant access to database connections.
-              </p>
+            {!isSetup && (
+              <div className="flex bg-[#111113] border border-white/[0.07] rounded-xl p-1 mb-4">
+                {[['login', 'Sign in'], ['register', 'Register']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => switchTab(key)}
+                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
+                      tab === key
+                        ? 'bg-gradient-violet text-white shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm mt-1"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" />
-                  Please wait…
-                </>
-              ) : (
-                isSetup ? 'Create admin account' : isRegister ? 'Create account' : 'Sign in'
+            <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                    {tab === 'login' && !isSetup ? 'Username or email' : 'Username'}
+                  </label>
+                  <input
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={e => { setUsername(e.target.value); clearMessages(); }}
+                    placeholder={tab === 'login' && !isSetup ? 'Username or email' : 'Enter username'}
+                    required
+                    className={inputCls}
+                  />
+                </div>
+
+                {isRegister && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={e => { setEmail(e.target.value); clearMessages(); }}
+                      placeholder="you@example.com"
+                      required
+                      className={inputCls}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPwd ? 'text' : 'password'}
+                      autoComplete={isRegister || isSetup ? 'new-password' : 'current-password'}
+                      value={password}
+                      onChange={e => { setPassword(e.target.value); clearMessages(); }}
+                      placeholder={isRegister || isSetup ? 'At least 8 characters' : 'Enter password'}
+                      required
+                      className={inputCls + ' pr-10'}
+                    />
+                    <button type="button" tabIndex={-1} onClick={() => setShowPwd(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                      <EyeIcon open={showPwd} />
+                    </button>
+                  </div>
+                </div>
+
+                {(isRegister || isSetup) && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirm ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={confirm}
+                        onChange={e => { setConfirm(e.target.value); clearMessages(); }}
+                        placeholder="Re-enter password"
+                        required
+                        className={inputCls + ' pr-10'}
+                      />
+                      <button type="button" tabIndex={-1} onClick={() => setShowConfirm(p => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                        <EyeIcon open={showConfirm} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <ErrorBox  msg={error}   />
+                <SuccessBox msg={success} />
+
+                {isRegister && (
+                  <p className="text-zinc-600 text-xs leading-relaxed">
+                    New accounts have <span className="text-zinc-500 font-medium">user</span> role. An admin must grant access to database connections.
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm mt-1"
+                >
+                  {loading ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Please wait…</>
+                  ) : (
+                    isSetup ? 'Create admin account' : isRegister ? 'Create account' : 'Sign in'
+                  )}
+                </button>
+              </form>
+
+              {/* Forgot password link */}
+              {!isSetup && tab === 'login' && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => { setEmail(''); clearMessages(); setScreen('forgot-email'); }}
+                    className="text-xs text-zinc-500 hover:text-violet-400 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
               )}
-            </button>
-          </form>
-        </div>
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );

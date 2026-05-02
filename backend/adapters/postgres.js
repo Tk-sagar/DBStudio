@@ -33,6 +33,7 @@ class PostgreSQLAdapter {
       user:     config.username,
       password: config.password,
       database: config.database,
+      ssl:      config.ssl ? { rejectUnauthorized: false } : false,
       max: 5,
       idleTimeoutMillis: 30_000,
     });

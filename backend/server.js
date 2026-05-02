@@ -8,7 +8,9 @@ const compression = require('compression');
 const path        = require('path');
 const fs          = require('fs');
 
-const { connect: connectMongo, User } = require('./db/app');
+const { connect: connectMongo, User, SavedConnection, ConnectionGrant, UserConnectionPin } = require('./db/app');
+const { decrypt }       = require('./utils/crypto');
+const { createAdapter } = require('./adapters');
 const registry      = require('./adapters/registry');
 const connectRouter = require('./routes/connect');
 const tablesRouter  = require('./routes/tables');
@@ -48,14 +50,69 @@ function safeJSON(data) {
 
 // ── Build the initial data object from the current session ────────────────────
 async function getInitialData(req) {
-  const user    = req.session?.user ?? null;
-  const adapter = registry.get(req.session.id);
+  const user = req.session?.user ?? null;
 
   let needsSetup = false;
   if (!user) {
     try { needsSetup = (await User.countDocuments()) === 0; } catch (_) {}
   }
 
+  const openConnections = [];
+  const sessionConns    = {};
+
+  if (user) {
+    const { id: userId, role } = user;
+    const pins = await UserConnectionPin.find({ user_id: userId }).sort({ pinned_at: 1 }).lean();
+
+    for (const pin of pins) {
+      const connId = pin.connection_id;
+      if (connId === '__direct__') continue;
+
+      const conn = await SavedConnection.findById(connId).lean();
+      if (!conn) { await UserConnectionPin.deleteOne({ _id: pin._id }); continue; }
+
+      let permission = 'full';
+      if (role !== 'admin') {
+        const grant = await ConnectionGrant.findOne({ connection_id: connId, user_id: userId }).lean();
+        if (!grant) { await UserConnectionPin.deleteOne({ _id: pin._id }); continue; }
+        permission = grant.permission;
+      }
+
+      const dbInfo = { type: conn.type, database: conn.database_name, name: conn.name };
+      openConnections.push({ id: connId, name: conn.name, type: conn.type, permission, dbInfo });
+      sessionConns[connId] = { dbInfo, permission };
+
+      if (!registry.getAllConnIds(req.session.id).includes(connId)) {
+        try {
+          const adapter = await createAdapter({
+            type:     conn.type,
+            host:     conn.host,
+            port:     conn.port,
+            username: conn.db_username,
+            password: decrypt(conn.db_password_enc),
+            database: conn.database_name,
+            ssl:      conn.use_ssl ?? false,
+          });
+          registry.add(req.session.id, connId, adapter);
+        } catch (_) {}
+      }
+    }
+
+    if (Object.keys(sessionConns).length) {
+      req.session.connections = sessionConns;
+      const validIds = openConnections.map(c => c.id);
+      if (!validIds.includes(req.session.activeConnId)) {
+        req.session.activeConnId = validIds[validIds.length - 1] ?? null;
+      }
+      if (req.session.activeConnId) {
+        registry.activate(req.session.id, req.session.activeConnId);
+        req.session.dbInfo       = sessionConns[req.session.activeConnId]?.dbInfo;
+        req.session.dbPermission = sessionConns[req.session.activeConnId]?.permission;
+      }
+    }
+  }
+
+  const adapter = registry.get(req.session.id);
   let tables = [];
   if (adapter) {
     try { tables = await adapter.getTables(); } catch (_) {}
@@ -68,6 +125,8 @@ async function getInitialData(req) {
     dbInfo:       adapter ? (req.session.dbInfo       ?? null) : null,
     dbPermission: adapter ? (req.session.dbPermission ?? 'full') : null,
     tables,
+    openConnections,
+    activeConnId: req.session.activeConnId || null,
   };
 }
 
@@ -135,9 +194,13 @@ async function main() {
   });
 
   // Auth endpoints: strict limits (count all attempts, not just failures)
-  app.use('/api/auth/login',    rl(15, false));
-  app.use('/api/auth/setup',    rl(10, false));
-  app.use('/api/auth/register', rl(10, false));
+  app.use('/api/auth/login',           rl(15, false));
+  app.use('/api/auth/setup',           rl(10, false));
+  app.use('/api/auth/register',        rl(10, false));
+  app.use('/api/auth/verify-email',    rl(20, false));
+  app.use('/api/auth/forgot-password', rl(10, false));
+  app.use('/api/auth/reset-password',  rl(10, false));
+  app.use('/api/auth/resend-otp',      rl(10, false));
   // Connection endpoints: moderate limits
   app.use('/api/connect',       rl(20));
   app.use('/api/my/connections', rl(60));

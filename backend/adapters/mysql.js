@@ -28,11 +28,13 @@ class MySQLAdapter {
 
   static async connect(config) {
     const connection = await mysql.createConnection({
-      host:     config.host || 'localhost',
-      port:     parseInt(config.port) || 3306,
-      user:     config.username,
-      password: config.password,
-      database: config.database,
+      host:        config.host || 'localhost',
+      port:        parseInt(config.port) || 3306,
+      user:        config.username,
+      password:    config.password,
+      database:    config.database,
+      dateStrings: true,
+      ssl:         config.ssl ? { rejectUnauthorized: false } : false,
     });
     return new MySQLAdapter(connection);
   }
