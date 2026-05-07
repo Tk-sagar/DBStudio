@@ -4,6 +4,7 @@ import SavedConnections from './SavedConnections.jsx';
 
 const STORAGE_KEY = 'dbadmin_connections';
 function loadConnections() {
+  if (typeof localStorage === 'undefined') return [];
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
 }
@@ -26,7 +27,7 @@ function autoName(form) {
   return `${form.username}@${form.host}/${form.database}`;
 }
 
-const inputCls = 'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-600 transition-all';
+const inputCls = 'w-full bg-base border border-zinc-800 text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-500 transition-all';
 const labelCls = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
 export default function LoginForm({ onConnect }) {
@@ -74,7 +75,7 @@ export default function LoginForm({ onConnect }) {
     try {
       const res = await api.post('/connect', form);
       if (wantSave) saveConnectionEntry(form, connName.trim() || autoName(form));
-      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables);
+      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables, res.data.connId);
     } catch (err) {
       setError(err.response?.data?.error || 'Connection failed. Check your credentials.');
     } finally {
@@ -96,7 +97,7 @@ export default function LoginForm({ onConnect }) {
     try {
       const res = await api.post('/connect', { type: conn.type, host: conn.host, port: conn.port,
         username: conn.username, password: conn.savedPassword, database: conn.database });
-      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables);
+      onConnect(res.data.dbInfo, res.data.dbPermission, res.data.tables, res.data.connId);
     } catch (err) {
       handleSelectSaved(conn);
       setError(err.response?.data?.error || 'Quick connect failed.');
@@ -121,7 +122,7 @@ export default function LoginForm({ onConnect }) {
       />
 
       {/* Form card */}
-      <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
+      <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card">
         <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* DB Type */}
@@ -185,10 +186,10 @@ export default function LoginForm({ onConnect }) {
           )}
 
           {/* Save options */}
-          <div className="border-t border-white/[0.07] pt-4 space-y-2.5">
+          <div className="border-t border-zinc-800 pt-4 space-y-2.5">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input type="checkbox" checked={wantSave} onChange={e => setWantSave(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-zinc-700 bg-[#0d0d10] accent-violet-500" />
+                className="w-3.5 h-3.5 rounded border-zinc-700 bg-base accent-violet-500" />
               <span className="text-xs text-zinc-400 font-medium">Save this connection</span>
             </label>
 
@@ -202,7 +203,7 @@ export default function LoginForm({ onConnect }) {
                 </div>
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
                   <input type="checkbox" checked={wantSavePass} onChange={e => setWantSavePass(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-zinc-700 bg-[#0d0d10] accent-violet-500" />
+                    className="w-3.5 h-3.5 rounded border-zinc-700 bg-base accent-violet-500" />
                   <span className="text-xs text-zinc-400">Save password locally</span>
                 </label>
                 {wantSavePass && (

@@ -34,7 +34,7 @@ function ConnectionCard({ conn, onSelect, onQuickConnect, onDelete }) {
   return (
     <div
       onClick={() => onSelect(conn)}
-      className="group flex items-center justify-between bg-[#111113] hover:bg-[#18181b] border border-white/[0.07] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 cursor-pointer transition-all"
+      className="group flex items-center justify-between bg-surface hover:bg-raised border border-zinc-800 hover:border-zinc-700 rounded-xl px-3.5 py-2.5 cursor-pointer transition-all"
     >
       <div className="flex items-center gap-3 min-w-0">
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
@@ -45,7 +45,7 @@ function ConnectionCard({ conn, onSelect, onQuickConnect, onDelete }) {
       </div>
 
       <div className="flex items-center gap-1.5 ml-3 shrink-0">
-        <span className="hidden sm:block text-[10px] font-medium px-1.5 py-0.5 bg-white/[0.04] text-zinc-500 rounded-md border border-white/[0.07]">
+        <span className="hidden sm:block text-[10px] font-medium px-1.5 py-0.5 bg-white/[0.12] text-zinc-500 rounded-md border border-zinc-800">
           {DB_LABEL[conn.type] || conn.type}
         </span>
 
