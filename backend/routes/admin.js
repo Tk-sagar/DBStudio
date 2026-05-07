@@ -2,7 +2,7 @@ const express      = require('express');
 const router       = express.Router();
 const bcrypt       = require('bcryptjs');
 const crypto       = require('crypto');
-const { User, Tenant, Invite, SavedConnection, ConnectionGrant } = require('../db/app');
+const { User, Organization, Invite, SavedConnection, ConnectionGrant } = require('../db/app');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { createAdapter }    = require('../adapters');
 const { sendInvite }       = require('../utils/mailer');
@@ -17,7 +17,7 @@ const INVITE_TTL   = 7 * 24 * 60 * 60 * 1000; // 7 days
 router.use('/admin', requireAdmin);
 
 // Helper: current tenant scope
-const ts = (req) => ({ tenant_id: req.session.user.tenant_id });
+const ts = (req) => ({ org_id: req.session.user.org_id });
 
 function safeConn(sc, extra = {}) {
   return {
@@ -34,20 +34,21 @@ function safeConn(sc, extra = {}) {
   };
 }
 
-// ── Tenant info ───────────────────────────────────────────────────────────────
+// ── Organization info ─────────────────────────────────────────────────────────
 
 router.get('/admin/tenant', async (req, res) => {
   try {
-    const tenant = await Tenant.findById(req.session.user.tenant_id).lean();
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found.' });
-    const userCount = await User.countDocuments({ tenant_id: tenant._id });
-    const connCount = await SavedConnection.countDocuments({ tenant_id: tenant._id });
+    const tenant = await Organization.findById(req.session.user.org_id).lean();
+    if (!tenant) return res.status(404).json({ error: 'Organization not found.' });
+    const userCount = await User.countDocuments({ org_id: tenant._id });
+    const connCount = await SavedConnection.countDocuments({ org_id: tenant._id });
     res.json({
       tenant: {
         id:              tenant._id.toString(),
         name:            tenant.name,
         slug:            tenant.slug,
         plan:            tenant.plan,
+        email_domain:    tenant.email_domain || null,
         max_users:       tenant.max_users,
         max_connections: tenant.max_connections,
         user_count:      userCount,
@@ -89,7 +90,7 @@ router.put('/admin/users/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     if (role !== undefined) {
-      if (!['tenant_admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
+      if (!['org_admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
       await User.findByIdAndUpdate(req.params.id, { role });
     }
     if (password !== undefined && password !== '') {
@@ -167,25 +168,32 @@ router.post('/admin/invites', async (req, res) => {
     const { email, role = 'user' } = req.body;
     if (!email?.trim()) return res.status(400).json({ error: 'Email is required.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return res.status(400).json({ error: 'Invalid email.' });
-    if (!['tenant_admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
+    if (!['org_admin', 'user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
 
-    // Check if user already exists in this tenant
-    const existing = await User.findOne({ email: email.trim().toLowerCase(), ...ts(req) }).lean();
-    if (existing) return res.status(409).json({ error: 'A user with this email already exists in this workspace.' });
+    // Check if user already exists globally (one email = one account)
+    const existing = await User.findOne({ email: email.trim().toLowerCase() }).lean();
+    if (existing) return res.status(409).json({ error: 'An account with this email already exists.' });
 
-    // Check plan limits
-    const tenant = await Tenant.findById(req.session.user.tenant_id).lean();
+    // Check plan limits + domain restriction
+    const tenant = await Organization.findById(req.session.user.org_id).lean();
+
+    if (tenant.email_domain) {
+      const invitedDomain = email.trim().toLowerCase().split('@')[1];
+      if (invitedDomain !== tenant.email_domain) {
+        return res.status(403).json({ error: `Only @${tenant.email_domain} email addresses can be invited to this organization.` });
+      }
+    }
     const userCount = await User.countDocuments(ts(req));
     if (userCount >= tenant.max_users) {
       return res.status(403).json({ error: `Your plan allows at most ${tenant.max_users} users. Upgrade to invite more.` });
     }
 
     // Invalidate any existing pending invite for this email+tenant
-    await Invite.deleteMany({ tenant_id: req.session.user.tenant_id, email: email.trim().toLowerCase(), used: false });
+    await Invite.deleteMany({ org_id: req.session.user.org_id, email: email.trim().toLowerCase(), used: false });
 
     const token   = crypto.randomBytes(32).toString('hex');
     const invite  = await Invite.create({
-      tenant_id:  req.session.user.tenant_id,
+      org_id:  req.session.user.org_id,
       email:      email.trim().toLowerCase(),
       role,
       token,
@@ -244,7 +252,7 @@ router.post('/admin/connections', async (req, res) => {
     }
     if (!database) return res.status(400).json({ error: 'Database name/path is required.' });
 
-    const tenant = await Tenant.findById(req.session.user.tenant_id).lean();
+    const tenant = await Organization.findById(req.session.user.org_id).lean();
     const connCount = await SavedConnection.countDocuments(ts(req));
     if (connCount >= tenant.max_connections) {
       return res.status(403).json({ error: `Your plan allows at most ${tenant.max_connections} connections. Upgrade to add more.` });
@@ -257,7 +265,7 @@ router.post('/admin/connections', async (req, res) => {
       db_username: dbUser || '', db_password_enc: enc,
       database_name: database, use_ssl: !!use_ssl,
       created_by: req.session.user.id,
-      tenant_id:  req.session.user.tenant_id,
+      org_id:  req.session.user.org_id,
     });
 
     res.status(201).json({ id: row._id.toString(), name: row.name });
@@ -374,7 +382,7 @@ router.post('/admin/connections/:id/grants', async (req, res) => {
 
     await ConnectionGrant.findOneAndUpdate(
       { connection_id: connId, user_id: userId },
-      { permission, granted_by: req.session.user.id, granted_at: new Date(), tenant_id: req.session.user.tenant_id },
+      { permission, granted_by: req.session.user.id, granted_at: new Date(), org_id: req.session.user.org_id },
       { upsert: true, new: true }
     );
 

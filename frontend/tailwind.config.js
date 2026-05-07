@@ -9,6 +9,7 @@ export default {
     path.join(__dirname, './index.html'),
     path.join(__dirname, './src/**/*.{js,ts,jsx,tsx}'),
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
@@ -16,26 +17,42 @@ export default {
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
-        base:    '#09090b',
-        surface: '#111113',
-        raised:  '#1c1c1f',
-        overlay: '#232329',
+        // ── Zinc — driven by CSS vars so they invert between light/dark ───────
+        zinc: {
+          50:  'rgb(var(--zinc-50)  / <alpha-value>)',
+          100: 'rgb(var(--zinc-100) / <alpha-value>)',
+          200: 'rgb(var(--zinc-200) / <alpha-value>)',
+          300: 'rgb(var(--zinc-300) / <alpha-value>)',
+          400: 'rgb(var(--zinc-400) / <alpha-value>)',
+          500: 'rgb(var(--zinc-500) / <alpha-value>)',
+          600: 'rgb(var(--zinc-600) / <alpha-value>)',
+          700: 'rgb(var(--zinc-700) / <alpha-value>)',
+          800: 'rgb(var(--zinc-800) / <alpha-value>)',
+          900: 'rgb(var(--zinc-900) / <alpha-value>)',
+          950: 'rgb(var(--zinc-950) / <alpha-value>)',
+        },
+        // ── Surface scale — driven by CSS vars ───────────────────────────────
+        base:    'var(--bg)',
+        surface: 'var(--surface)',
+        raised:  'var(--raised)',
+        overlay: 'var(--overlay)',
+        // ── Accent ──────────────────────────────────────────────────────────
         violet: {
-          DEFAULT: '#7c3aed',
-          hover:   '#6d28d9',
-          subtle:  'rgba(124,58,237,0.12)',
-          border:  'rgba(124,58,237,0.28)',
-          glow:    'rgba(124,58,237,0.18)',
+          DEFAULT: 'var(--violet)',
+          hover:   '#7c3aed',
+          subtle:  'rgba(139,92,246,0.15)',
+          border:  'rgba(139,92,246,0.32)',
+          glow:    'rgba(139,92,246,0.22)',
         },
       },
       boxShadow: {
-        'glow-violet': '0 0 0 1px rgba(124,58,237,0.4), 0 0 20px rgba(124,58,237,0.15)',
-        'card':        '0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.25)',
-        'modal':       '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)',
+        'glow-violet': '0 0 0 1px rgba(139,92,246,0.45), 0 0 20px rgba(139,92,246,0.20)',
+        'card':        '0 1px 3px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3)',
+        'modal':       '0 8px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.4)',
       },
       backgroundImage: {
-        'gradient-violet':  'linear-gradient(135deg, #7c3aed, #6366f1)',
-        'gradient-surface': 'linear-gradient(180deg, #151518 0%, #111113 100%)',
+        'gradient-violet':  'linear-gradient(135deg, #8b5cf6, #6366f1)',
+        'gradient-surface': 'linear-gradient(180deg, var(--raised) 0%, var(--surface) 100%)',
       },
       animation: {
         'spin-fast': 'spin 0.6s linear infinite',

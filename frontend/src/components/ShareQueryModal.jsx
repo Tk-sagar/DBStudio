@@ -49,7 +49,7 @@ export default function ShareQueryModal({ query, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-[#111113] border border-white/[0.08] rounded-2xl shadow-2xl p-6 space-y-4">
+      <div className="relative w-full max-w-md bg-surface border border-zinc-800 rounded-2xl shadow-2xl p-6 space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -70,11 +70,11 @@ export default function ShareQueryModal({ query, onClose, onSaved }) {
           className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
             isPublic
               ? 'bg-violet-500/10 border-violet-500/30'
-              : 'bg-[#0d0d10] border-white/[0.07] hover:border-white/[0.12]'
+              : 'bg-base border-zinc-800 hover:border-zinc-700'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPublic ? 'bg-violet-500/20' : 'bg-white/[0.05]'}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPublic ? 'bg-violet-500/20' : 'bg-white/[0.09]'}`}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={isPublic ? 'text-violet-400' : 'text-zinc-500'}>
                 <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
                 <path d="M7 1.5C7 1.5 5 4 5 7s2 5.5 2 5.5M7 1.5C7 1.5 9 4 9 7s-2 5.5-2 5.5M1.5 7h11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
@@ -105,13 +105,13 @@ export default function ShareQueryModal({ query, onClose, onSaved }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search users…"
-              className="w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-600 transition-all"
+              className="w-full bg-base border border-zinc-800 text-zinc-100 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-500 transition-all"
             />
 
             {allUsers.length === 0 ? (
               <p className="text-[11px] text-zinc-600 text-center py-4">No other users found.</p>
             ) : (
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-white/[0.06] divide-y divide-white/[0.04]">
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-700/80 divide-y divide-white/[0.04]">
                 {filtered.length === 0 ? (
                   <p className="text-[11px] text-zinc-600 text-center py-4">No users match.</p>
                 ) : filtered.map(u => {
@@ -153,7 +153,7 @@ export default function ShareQueryModal({ query, onClose, onSaved }) {
         )}
 
         <div className="flex gap-2 pt-1">
-          <button onClick={onClose} className="flex-1 text-xs py-2 rounded-xl border border-white/[0.07] text-zinc-400 hover:text-zinc-200 hover:border-white/[0.12] transition-all">
+          <button onClick={onClose} className="flex-1 text-xs py-2 rounded-xl border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all">
             Cancel
           </button>
           <button

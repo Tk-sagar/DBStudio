@@ -11,13 +11,13 @@ function ErrorBanner({ msg, onDismiss }) {
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, wide, children }) {
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#111113] border border-white/[0.09] rounded-2xl w-full max-w-md shadow-modal">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-auto">
+      <div className={`bg-surface border border-zinc-700/60 rounded-2xl w-full shadow-modal ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <h3 className="text-zinc-100 text-sm font-semibold">{title}</h3>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all text-lg leading-none">×</button>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/15 transition-all text-lg leading-none">×</button>
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -25,11 +25,135 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const input  = 'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-700 transition-all';
+const input  = 'w-full bg-base border border-zinc-800 text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-500 transition-all';
 const select = input + ' cursor-pointer';
 const lbl    = 'block text-xs font-medium text-zinc-400 mb-1.5';
 const btnPrim = 'flex-1 py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all';
-const btnSec  = 'px-4 py-2.5 bg-[#1c1c1f] text-zinc-400 border border-white/[0.08] text-sm font-medium rounded-xl hover:bg-[#232329] hover:text-zinc-300 transition-all';
+const btnSec  = 'px-4 py-2.5 bg-raised text-zinc-400 border border-zinc-800 text-sm font-medium rounded-xl hover:bg-overlay hover:text-zinc-300 transition-all';
+
+const ROLE_LABEL = { super_admin: 'Super Admin', org_admin: 'Admin', user: 'Member' };
+const DB_TYPE_COLOR = { mysql: 'text-orange-400', mariadb: 'text-orange-400', postgres: 'text-sky-400', postgresql: 'text-sky-400', sqlite: 'text-emerald-400' };
+
+function OrgDetailModal({ orgId, onClose }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [tab,     setTab]     = useState('users');
+
+  useEffect(() => {
+    api.get(`/super/tenants/${orgId}`)
+      .then(r => setData(r.data))
+      .catch(() => setError('Failed to load organization details.'))
+      .finally(() => setLoading(false));
+  }, [orgId]);
+
+  return (
+    <Modal title={data ? `${data.org.name}` : 'Organization'} onClose={onClose} wide>
+      {loading ? (
+        <div className="flex items-center gap-2.5 text-zinc-600 text-sm py-6">
+          <span className="w-4 h-4 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />Loading…
+        </div>
+      ) : error ? (
+        <p className="text-red-400 text-sm">{error}</p>
+      ) : (
+        <div className="space-y-5">
+          {/* Org meta */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: 'Domain', value: data.org.email_domain ? `@${data.org.email_domain}` : '—' },
+              { label: 'Plan', value: data.org.plan.toUpperCase() },
+              { label: 'Users', value: `${data.users.length} / ${data.org.max_users}` },
+              { label: 'Connections', value: `${data.connections.length} / ${data.org.max_connections}` },
+            ].map(s => (
+              <div key={s.label} className="bg-raised border border-zinc-700/80 rounded-xl px-4 py-3">
+                <p className="text-zinc-600 text-[10px] uppercase tracking-wider mb-1">{s.label}</p>
+                <p className="text-zinc-200 text-sm font-semibold font-mono">{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex bg-raised border border-zinc-700/80 rounded-xl p-1 gap-1">
+            {[['users', `Users (${data.users.length})`], ['connections', `Connections (${data.connections.length})`]].map(([key, label]) => (
+              <button key={key} onClick={() => setTab(key)}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${tab === key ? 'bg-overlay text-zinc-200' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Users tab */}
+          {tab === 'users' && (
+            data.users.length === 0 ? (
+              <p className="text-zinc-600 text-xs text-center py-6">No users in this organization.</p>
+            ) : (
+              <div className="bg-raised border border-zinc-700/80 rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-700/80">
+                      {['Username', 'Email', 'Role', 'Verified', 'Joined'].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.users.map(u => (
+                      <tr key={u.id} className="border-b border-zinc-800 last:border-0 hover:bg-zinc-800/15">
+                        <td className="px-4 py-2.5 text-zinc-200 font-medium font-mono">{u.username}</td>
+                        <td className="px-4 py-2.5 text-zinc-400">{u.email || <span className="text-zinc-500">—</span>}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                            u.role === 'org_admin' ? 'bg-amber-500/10 text-amber-400 border-amber-500/25' : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
+                          }`}>{ROLE_LABEL[u.role] || u.role}</span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {u.email_verified
+                            ? <span className="text-emerald-500 text-[10px]">✓ Yes</span>
+                            : <span className="text-zinc-500 text-[10px]">No</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-zinc-600">{new Date(u.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+
+          {/* Connections tab */}
+          {tab === 'connections' && (
+            data.connections.length === 0 ? (
+              <p className="text-zinc-600 text-xs text-center py-6">No connections in this organization.</p>
+            ) : (
+              <div className="bg-raised border border-zinc-700/80 rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-700/80">
+                      {['Name', 'Type', 'Database', 'Host', 'Added'].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.connections.map(c => (
+                      <tr key={c.id} className="border-b border-zinc-800 last:border-0 hover:bg-zinc-800/15">
+                        <td className="px-4 py-2.5 text-zinc-200 font-medium">{c.name}</td>
+                        <td className={`px-4 py-2.5 font-mono uppercase font-semibold text-[10px] ${DB_TYPE_COLOR[c.type] || 'text-zinc-400'}`}>{c.type}</td>
+                        <td className="px-4 py-2.5 text-zinc-400 font-mono">{c.database_name}</td>
+                        <td className="px-4 py-2.5 text-zinc-600 font-mono">{c.host || '—'}</td>
+                        <td className="px-4 py-2.5 text-zinc-600">{new Date(c.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 export default function SuperAdminPanel({ user, onLogout }) {
   const [tenants,    setTenants]    = useState([]);
@@ -37,6 +161,7 @@ export default function SuperAdminPanel({ user, onLogout }) {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
   const [editTenant, setEditTenant] = useState(null);
+  const [viewOrgId,  setViewOrgId]  = useState(null);
   const [saving,     setSaving]     = useState(false);
   const [formErr,    setFormErr]    = useState('');
 
@@ -51,7 +176,7 @@ export default function SuperAdminPanel({ user, onLogout }) {
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete workspace "${name}" and ALL its data? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete organization "${name}" and ALL its data? This cannot be undone.`)) return;
     try { await api.delete(`/super/tenants/${id}`); load(); }
     catch (err) { setError(err.response?.data?.error || 'Failed.'); }
   };
@@ -71,15 +196,14 @@ export default function SuperAdminPanel({ user, onLogout }) {
   };
 
   return (
-    <div className="min-h-full bg-[#09090b] flex flex-col">
+    <div className="min-h-full bg-base flex flex-col">
       {/* Navbar */}
-      <nav className="h-12 bg-[#111113] border-b border-white/[0.07] flex items-center justify-between px-5 shrink-0">
+      <nav className="h-12 bg-surface border-b border-zinc-800 flex items-center justify-between px-5 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-violet-400" />
-            <span className="text-zinc-200 text-sm font-semibold">Super Admin</span>
+            <span className="text-zinc-200 text-sm font-semibold">Platform Admin</span>
           </div>
-          <span className="text-xs text-zinc-700 border border-white/[0.07] bg-[#1c1c1f] px-2 py-0.5 rounded-md font-mono">Platform</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-xs text-zinc-600 font-mono mr-2 select-none">{user.username}</span>
@@ -87,21 +211,21 @@ export default function SuperAdminPanel({ user, onLogout }) {
         </div>
       </nav>
 
-      <div className="flex-1 max-w-5xl mx-auto w-full px-8 py-8">
+      <div className="flex-1 max-w-6xl mx-auto w-full px-8 py-8">
         <div className="mb-7">
-          <h1 className="text-zinc-100 text-2xl font-semibold tracking-tight">Workspaces</h1>
-          <p className="text-zinc-600 text-sm mt-1">All tenants using this platform.</p>
+          <h1 className="text-zinc-100 text-2xl font-semibold tracking-tight">Organizations</h1>
+          <p className="text-zinc-600 text-sm mt-1">All companies and organizations on this platform.</p>
         </div>
 
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-3 gap-4 mb-7">
             {[
-              { label: 'Total workspaces', value: stats.tenantCount },
+              { label: 'Total organizations', value: stats.tenantCount },
               { label: 'Total users', value: stats.userCount },
               { label: 'Total connections', value: stats.connCount },
             ].map(s => (
-              <div key={s.label} className="bg-[#111113] border border-white/[0.07] rounded-2xl px-5 py-4">
+              <div key={s.label} className="bg-surface border border-zinc-800 rounded-2xl px-5 py-4">
                 <p className="text-zinc-100 text-2xl font-bold">{s.value}</p>
                 <p className="text-zinc-600 text-xs mt-1">{s.label}</p>
               </div>
@@ -116,16 +240,16 @@ export default function SuperAdminPanel({ user, onLogout }) {
             <span className="w-4 h-4 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />Loading…
           </div>
         ) : tenants.length === 0 ? (
-          <div className="text-center py-20 bg-[#111113] border border-white/[0.07] rounded-2xl">
-            <p className="text-zinc-400 text-sm font-medium mb-1">No workspaces yet</p>
-            <p className="text-zinc-600 text-xs">Workspaces are created when companies register.</p>
+          <div className="text-center py-20 bg-surface border border-zinc-800 rounded-2xl">
+            <p className="text-zinc-400 text-sm font-medium mb-1">No organizations yet</p>
+            <p className="text-zinc-600 text-xs">Organizations are created when companies sign up.</p>
           </div>
         ) : (
-          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl overflow-hidden">
+          <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-white/[0.06]">
-                  {['Workspace', 'Plan', 'Users', 'Connections', 'Created', ''].map(h => (
+                <tr className="border-b border-zinc-700/80">
+                  {['Organization', 'Domain', 'Plan', 'Users', 'Connections', 'Created', ''].map(h => (
                     <th key={h} className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
                   ))}
                 </tr>
@@ -136,27 +260,32 @@ export default function SuperAdminPanel({ user, onLogout }) {
                     ? 'bg-violet-500/10 text-violet-400 border-violet-500/25'
                     : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20';
                   return (
-                    <tr key={t.id} className={`border-b border-white/[0.05] last:border-0 hover:bg-white/[0.02] ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
+                    <tr key={t.id} className={`border-b border-zinc-700/60 last:border-0 hover:bg-zinc-800/15 ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
                       <td className="px-5 py-3">
                         <p className="text-zinc-200 font-medium">{t.name}</p>
-                        <p className="text-zinc-700 font-mono text-[10px] mt-0.5">{t.slug}</p>
+                        <p className="text-zinc-500 font-mono text-[10px] mt-0.5">{t.slug}</p>
+                      </td>
+                      <td className="px-5 py-3 text-zinc-500 font-mono">
+                        {t.email_domain ? `@${t.email_domain}` : <span className="text-zinc-500">—</span>}
                       </td>
                       <td className="px-5 py-3">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wide ${planStyle}`}>{t.plan}</span>
                       </td>
                       <td className="px-5 py-3 text-zinc-300">
-                        {t.user_count}<span className="text-zinc-700">/{t.max_users}</span>
+                        {t.user_count}<span className="text-zinc-500">/{t.max_users}</span>
                       </td>
                       <td className="px-5 py-3 text-zinc-300">
-                        {t.conn_count}<span className="text-zinc-700">/{t.max_connections}</span>
+                        {t.conn_count}<span className="text-zinc-500">/{t.max_connections}</span>
                       </td>
                       <td className="px-5 py-3 text-zinc-600">{new Date(t.created_at).toLocaleDateString()}</td>
                       <td className="px-5 py-3">
                         <div className="flex gap-1.5 justify-end">
+                          <button onClick={() => setViewOrgId(t.id)}
+                            className="text-xs px-2.5 py-1 bg-raised hover:bg-violet-500/10 text-zinc-400 hover:text-violet-300 border border-zinc-800 hover:border-violet-500/20 rounded-lg font-medium transition-all">View</button>
                           <button onClick={() => setEditTenant({ id: t.id, name: t.name, plan: t.plan, max_users: t.max_users, max_connections: t.max_connections })}
-                            className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all">Edit</button>
+                            className="text-xs px-2.5 py-1 bg-raised hover:bg-overlay text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-medium transition-all">Edit</button>
                           <button onClick={() => handleDelete(t.id, t.name)}
-                            className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-white/[0.08] hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
+                            className="text-xs px-2.5 py-1 bg-raised hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -168,11 +297,15 @@ export default function SuperAdminPanel({ user, onLogout }) {
         )}
       </div>
 
+      {viewOrgId && (
+        <OrgDetailModal orgId={viewOrgId} onClose={() => setViewOrgId(null)} />
+      )}
+
       {editTenant && (
         <Modal title={`Edit — ${editTenant.name}`} onClose={() => setEditTenant(null)}>
           <form onSubmit={handleEdit} className="space-y-4">
             <div>
-              <label className={lbl}>Workspace name</label>
+              <label className={lbl}>Organization name</label>
               <input className={input} value={editTenant.name} onChange={e => setEditTenant(p => ({ ...p, name: e.target.value }))} required />
             </div>
             <div>

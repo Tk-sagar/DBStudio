@@ -71,8 +71,8 @@ function EmptyState({ tab }) {
   const { title, sub } = messages[tab] || messages.all;
   return (
     <div className="flex flex-col items-center justify-center py-24 gap-4">
-      <div className="w-14 h-14 rounded-2xl bg-[#111113] border border-white/[0.07] flex items-center justify-center">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="text-zinc-700">
+      <div className="w-14 h-14 rounded-2xl bg-surface border border-zinc-800 flex items-center justify-center">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="text-zinc-500">
           <rect x="1.5" y="1.5" width="19" height="19" rx="4.5" stroke="currentColor" strokeWidth="1.3"/>
           <path d="M6 8.5h10M6 11h8M6 13.5h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
         </svg>
@@ -103,7 +103,7 @@ function QueryCard({ q, onOpen, onShare, onDelete }) {
   return (
     <div
       onClick={() => onOpen(q)}
-      className="group relative bg-[#111113] border border-white/[0.07] rounded-2xl p-5 hover:border-violet-500/25 hover:bg-[#141417] transition-all cursor-pointer flex flex-col gap-3.5 min-h-[148px]"
+      className="group relative bg-surface border border-zinc-800 rounded-2xl p-5 hover:border-violet-500/25 hover:bg-surface transition-all cursor-pointer flex flex-col gap-3.5 min-h-[148px]"
     >
       {/* Top row */}
       <div className="flex items-start justify-between gap-3">
@@ -127,7 +127,7 @@ function QueryCard({ q, onOpen, onShare, onDelete }) {
 
       {/* Description */}
       <p className="text-[12px] text-zinc-500 leading-relaxed line-clamp-2 flex-1 min-h-[2.5rem]">
-        {q.description || <span className="italic text-zinc-700">No description</span>}
+        {q.description || <span className="italic text-zinc-500">No description</span>}
       </p>
 
       {/* Footer */}
@@ -231,10 +231,10 @@ export default function QueriesPage({ onOpenInEditor }) {
   const pub    = queries.filter(q => q.is_public);
 
   return (
-    <div className="flex flex-col h-full bg-[#09090b] font-sans overflow-hidden">
+    <div className="flex flex-col h-full bg-base font-sans overflow-hidden">
 
       {/* ── Page header ── */}
-      <div className="shrink-0 border-b border-white/[0.07] bg-[#09090b]">
+      <div className="shrink-0 border-b border-zinc-800 bg-base">
         <div className="px-8 pt-7 pb-0">
           <div className="flex items-start justify-between mb-5">
             <div>
@@ -274,7 +274,7 @@ export default function QueriesPage({ onOpenInEditor }) {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search queries…"
-                className="w-full bg-[#111113] border border-white/[0.07] text-zinc-300 text-xs rounded-xl pl-7 pr-3 py-2 focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/15 placeholder-zinc-700 transition-all"
+                className="w-full bg-surface border border-zinc-800 text-zinc-300 text-xs rounded-xl pl-7 pr-3 py-2 focus:outline-none focus:border-violet-500/40 focus:ring-1 focus:ring-violet-500/15 placeholder-zinc-500 transition-all"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors text-base leading-none">×</button>
@@ -290,12 +290,12 @@ export default function QueriesPage({ onOpenInEditor }) {
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                     tab === t.key
                       ? 'bg-violet-500/12 text-violet-300 border border-violet-500/25'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/20'
                   }`}
                 >
                   {t.label}
                   {t.key !== 'all' && (
-                    <span className={`ml-1.5 text-[10px] tabular-nums ${tab === t.key ? 'text-violet-400/70' : 'text-zinc-700'}`}>
+                    <span className={`ml-1.5 text-[10px] tabular-nums ${tab === t.key ? 'text-violet-400/70' : 'text-zinc-500'}`}>
                       {t.key === 'mine'   ? mine.length
                       : t.key === 'shared' ? shared.length
                       : pub.length}

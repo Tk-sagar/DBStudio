@@ -8,7 +8,7 @@ const compression = require('compression');
 const path        = require('path');
 const fs          = require('fs');
 
-const { connect: connectMongo, Tenant, User, SavedConnection, ConnectionGrant, UserConnectionPin } = require('./db/app');
+const { connect: connectMongo, Organization, User, SavedConnection, ConnectionGrant, UserConnectionPin } = require('./db/app');
 const { decrypt }       = require('./utils/crypto');
 const { createAdapter } = require('./adapters');
 const registry      = require('./adapters/registry');
@@ -20,7 +20,8 @@ const authRouter    = require('./routes/auth');
 const adminRouter   = require('./routes/admin');
 const myConnsRouter    = require('./routes/userConnections');
 const savedQueriesRouter = require('./routes/savedQueries');
-const superAdminRouter = require('./routes/superAdmin');
+const superAdminRouter   = require('./routes/superAdmin');
+const auditLogRouter     = require('./routes/auditLog');
 
 const IS_PROD       = process.env.NODE_ENV === 'production';
 const PORT          = process.env.PORT || 5001;
@@ -70,7 +71,7 @@ async function getInitialData(req) {
       if (connId === '__direct__') continue;
 
       const conn = await SavedConnection.findById(connId).lean();
-      if (!conn || (role !== 'super_admin' && user.tenant_id && conn.tenant_id?.toString() !== user.tenant_id)) {
+      if (!conn || (role !== 'super_admin' && user.org_id && conn.org_id?.toString() !== user.org_id)) {
         await UserConnectionPin.deleteOne({ _id: pin._id }); continue;
       }
 
@@ -220,6 +221,7 @@ async function main() {
   app.use('/api', rowsRouter);
   app.use('/api', savedQueriesRouter);
   app.use('/api', superAdminRouter);
+  app.use('/api', auditLogRouter);
 
   // Health check — no internal details
   app.get('/health', (_req, res) => res.json({ ok: true }));

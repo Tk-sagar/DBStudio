@@ -4,7 +4,7 @@ import api from '../api/client.js';
 const KEY_META = {
   PRI: { label: 'PRIMARY', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
   UNI: { label: 'UNIQUE',  cls: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
-  MUL: { label: 'INDEX',   cls: 'bg-zinc-700/40 text-zinc-400 border-zinc-700/60' },
+  MUL: { label: 'INDEX',   cls: 'bg-zinc-700/40 text-zinc-400 border-zinc-800' },
 };
 
 export default function TableStructure({ tableName }) {
@@ -35,7 +35,7 @@ export default function TableStructure({ tableName }) {
     <div className="overflow-auto rounded-xl border border-zinc-800">
       <table className="w-full text-sm text-left border-collapse">
         <thead>
-          <tr className="bg-[#18181b] border-b-2 border-zinc-800">
+          <tr className="bg-raised border-b-2 border-zinc-800">
             {['#', 'Column', 'Type', 'Nullable', 'Default', 'Key'].map(h => (
               <th key={h} className="px-4 py-3 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider whitespace-nowrap border-r border-zinc-800/60 last:border-r-0">
                 {h}
@@ -48,9 +48,9 @@ export default function TableStructure({ tableName }) {
             const meta = KEY_META[col.key];
             return (
               <tr key={col.name}
-                className={`border-b border-zinc-800/70 last:border-0 hover:bg-[#1c1c1f] transition-colors ${i % 2 === 0 ? 'bg-[#111113]' : 'bg-[#0f0f12]'}`}
+                className={`border-b border-zinc-800/70 last:border-0 hover:bg-raised transition-colors ${i % 2 === 0 ? 'bg-surface' : 'bg-base'}`}
               >
-                <td className="px-4 py-3 text-zinc-700 text-xs font-mono border-r border-zinc-800/40">{i + 1}</td>
+                <td className="px-4 py-3 text-zinc-500 text-xs font-mono border-r border-zinc-800/40">{i + 1}</td>
                 <td className="px-4 py-3 text-zinc-100 font-mono text-sm font-semibold border-r border-zinc-800/40">{col.name}</td>
                 <td className="px-4 py-3 text-sky-400 font-mono text-xs border-r border-zinc-800/40">{col.type}</td>
                 <td className="px-4 py-3 border-r border-zinc-800/40">
@@ -61,7 +61,7 @@ export default function TableStructure({ tableName }) {
                 <td className="px-4 py-3 font-mono text-xs border-r border-zinc-800/40">
                   {col.default != null
                     ? <span className="text-amber-400">{String(col.default)}</span>
-                    : <span className="text-zinc-700 italic">NULL</span>}
+                    : <span className="text-zinc-500 italic">NULL</span>}
                 </td>
                 <td className="px-4 py-3">
                   {meta && (

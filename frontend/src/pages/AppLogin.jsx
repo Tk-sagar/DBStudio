@@ -34,8 +34,8 @@ function BackIcon() {
 }
 
 const inputCls = [
-  'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl',
-  'px-3.5 py-2.5 placeholder-zinc-600',
+  'w-full bg-base border border-zinc-800 text-zinc-100 text-sm rounded-xl',
+  'px-3.5 py-2.5 placeholder-zinc-500',
   'focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15',
   'transition-all duration-150',
 ].join(' ');
@@ -94,8 +94,8 @@ function OtpInput({ value, onChange }) {
       onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
       placeholder="000000"
       className={[
-        'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 rounded-xl',
-        'px-3.5 py-3 text-center text-2xl font-mono tracking-[0.5em] placeholder-zinc-700',
+        'w-full bg-base border border-zinc-800 text-zinc-100 rounded-xl',
+        'px-3.5 py-3 text-center text-2xl font-mono tracking-[0.5em] placeholder-zinc-500',
         'focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15',
         'transition-all duration-150',
       ].join(' ')}
@@ -136,7 +136,7 @@ function ResendButton({ userId, type, onSuccess, onError }) {
 
   return (
     <button type="button" onClick={handleResend} disabled={busy || cooldown > 0}
-      className="text-xs text-zinc-500 hover:text-violet-400 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors">
+      className="text-xs text-zinc-500 hover:text-violet-400 disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors">
       {busy ? 'Sending…' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
     </button>
   );
@@ -167,7 +167,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
   const [pendingEmail, setPendingEmail] = useState('');
 
   // Invite join
-  const [inviteInfo, setInviteInfo] = useState(null); // { email, role, tenant_name }
+  const [inviteInfo, setInviteInfo] = useState(null); // { email, role, org_name }
   const [joinPwd, setJoinPwd] = useState('');
   const [joinConf, setJoinConf] = useState('');
   const [showJoinPwd, setShowJoinPwd] = useState(false);
@@ -210,11 +210,11 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
     e.preventDefault();
     clearMessages();
     const isRegister = !isSetup && tab === 'register';
-    if (isRegister && password !== confirm) return setError('Passwords do not match.');
+    if ((isRegister || isSetup) && password !== confirm) return setError('Passwords do not match.');
     setLoading(true);
     try {
       if (isSetup) {
-        const res = await api.post('/auth/setup', { username: username.trim(), password });
+        const res = await api.post('/auth/setup', { orgName: orgName.trim(), username: username.trim(), password, email: email.trim() || undefined });
         onLogin(res.data.user);
       } else if (isRegister) {
         const res = await api.post('/auth/register', {
@@ -323,12 +323,12 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
     : screen === 'verify-email' ? 'Verify your email'
     : screen === 'forgot-email' ? 'Reset your password'
     : screen === 'forgot-reset' ? 'Set a new password'
-    : screen === 'join'         ? `Join ${inviteInfo?.tenant_name || 'workspace'}`
-    : isRegister                ? 'Create your workspace'
-    : 'Sign in to your workspace';
+    : screen === 'join'         ? `Join ${inviteInfo?.org_name || 'organization'}`
+    : isRegister                ? 'Create your organization'
+    : 'Sign in';
 
   return (
-    <div className="min-h-full bg-[#09090b] dot-grid flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-full bg-base dot-grid flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-violet-600/[0.06] blur-[120px]" />
       </div>
@@ -336,7 +336,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
       <div className="w-full max-w-[380px] relative z-10">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-[#111113] border border-white/[0.08] flex items-center justify-center mx-auto mb-5 shadow-card">
+          <div className="w-14 h-14 rounded-2xl bg-surface border border-zinc-800 flex items-center justify-center mx-auto mb-5 shadow-card">
             <LogoMark />
           </div>
           <h1 className="text-zinc-100 text-xl font-semibold tracking-tight mb-1">DB Studio</h1>
@@ -345,12 +345,12 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
 
         {/* ── Join invite screen ────────────────────────────────────────────── */}
         {screen === 'join' && inviteInfo && (
-          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+          <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card space-y-5">
             {/* Invite banner */}
             <div className="bg-violet-500/[0.08] border border-violet-500/20 rounded-xl px-4 py-3 space-y-0.5">
               <p className="text-violet-300 text-xs font-medium">Invited to join</p>
-              <p className="text-zinc-200 text-sm font-semibold">{inviteInfo.tenant_name}</p>
-              <p className="text-zinc-500 text-xs">{inviteInfo.email} · {inviteInfo.role === 'tenant_admin' ? 'Admin' : 'Member'}</p>
+              <p className="text-zinc-200 text-sm font-semibold">{inviteInfo.org_name}</p>
+              <p className="text-zinc-500 text-xs">{inviteInfo.email} · {inviteInfo.role === 'org_admin' ? 'Admin' : 'Member'} · {inviteInfo.org_name}</p>
             </div>
 
             <form onSubmit={handleJoin} className="space-y-4">
@@ -387,7 +387,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
               <ErrorBox msg={error} />
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all duration-150 flex items-center justify-center gap-2 shadow-sm">
-                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Joining…</> : 'Join workspace'}
+                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Joining…</> : 'Join organization'}
               </button>
             </form>
           </div>
@@ -395,7 +395,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
 
         {/* ── Email verification screen ─────────────────────────────────────── */}
         {screen === 'verify-email' && (
-          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+          <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card space-y-5">
             <div className="flex justify-center"><MailIcon /></div>
             <div className="text-center space-y-1">
               <p className="text-zinc-200 text-sm font-medium">Check your inbox</p>
@@ -428,7 +428,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
 
         {/* ── Forgot password — enter email ─────────────────────────────────── */}
         {screen === 'forgot-email' && (
-          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
+          <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card">
             <form onSubmit={handleForgotEmail} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1.5">Account email</label>
@@ -451,7 +451,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
 
         {/* ── Forgot password — OTP + new password ─────────────────────────── */}
         {screen === 'forgot-reset' && (
-          <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card space-y-5">
+          <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card space-y-5">
             <div className="flex justify-center"><MailIcon /></div>
             <div className="text-center space-y-1">
               <p className="text-zinc-200 text-sm font-medium">Reset code sent</p>
@@ -512,14 +512,14 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
                   <path d="M7 5.5v3M7 10h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 </svg>
                 <p className="text-amber-400/90 text-xs leading-relaxed">
-                  First-time setup — this creates your super admin account to manage all workspaces.
+                  First-time setup — creates your organization and a super admin account with full platform access.
                 </p>
               </div>
             )}
 
             {!isSetup && (
-              <div className="flex bg-[#111113] border border-white/[0.07] rounded-xl p-1 mb-4">
-                {[['login', 'Sign in'], ['register', 'New workspace']].map(([key, label]) => (
+              <div className="flex bg-surface border border-zinc-800 rounded-xl p-1 mb-4">
+                {[['login', 'Sign in'], ['register', 'New organization']].map(([key, label]) => (
                   <button key={key} type="button" onClick={() => switchTab(key)}
                     className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
                       tab === key ? 'bg-gradient-violet text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
@@ -528,10 +528,10 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
               </div>
             )}
 
-            <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-6 shadow-card">
+            <div className="bg-surface border border-zinc-800 rounded-2xl p-6 shadow-card">
               <form onSubmit={handleFormSubmit} className="space-y-4">
 
-                {isRegister && (
+                {(isRegister || isSetup) && (
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1.5">Organization name</label>
                     <input type="text" autoComplete="organization" value={orgName}
@@ -550,12 +550,14 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
                     required className={inputCls} />
                 </div>
 
-                {isRegister && (
+                {(isRegister || isSetup) && (
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Work email</label>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                      Work email{isSetup && <span className="text-zinc-600 ml-1">(optional)</span>}
+                    </label>
                     <input type="email" autoComplete="email" value={email}
                       onChange={e => { setEmail(e.target.value); clearMessages(); }}
-                      placeholder="you@company.com" required className={inputCls} />
+                      placeholder="you@company.com" required={isRegister} className={inputCls} />
                   </div>
                 )}
 
@@ -594,7 +596,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
 
                 {isRegister && (
                   <p className="text-zinc-600 text-xs leading-relaxed">
-                    You'll be the <span className="text-zinc-500 font-medium">admin</span> of your workspace. Invite teammates after signing in.
+                    You'll be the <span className="text-zinc-500 font-medium">admin</span> of your organization. Invite teammates after signing in.
                   </p>
                 )}
 
@@ -603,7 +605,7 @@ export default function AppLogin({ mode, onLogin, inviteToken }) {
                   {loading ? (
                     <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-fast" /> Please wait…</>
                   ) : (
-                    isSetup ? 'Create admin account' : isRegister ? 'Create workspace' : 'Sign in'
+                    isSetup ? 'Create admin account' : isRegister ? 'Create organization' : 'Sign in'
                   )}
                 </button>
               </form>

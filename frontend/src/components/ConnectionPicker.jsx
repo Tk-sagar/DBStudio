@@ -27,14 +27,14 @@ function LogoMark() {
   );
 }
 
-export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, onClose }) {
+export default function ConnectionPicker({ user, onConnect, onAdmin, onPlatform, onLogout, onClose }) {
   const [connections, setConnections] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [connecting,  setConnecting]  = useState(null);
   const [error,       setError]       = useState('');
   const [tab,         setTab]         = useState('shared');
 
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user.role === 'org_admin';
 
   useEffect(() => {
     api.get('/my/connections')
@@ -59,15 +59,15 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
   };
 
   return (
-    <div className="min-h-full bg-[#09090b] dot-grid flex flex-col">
+    <div className="min-h-full bg-base dot-grid flex flex-col">
       {/* Navbar */}
-      <nav className="h-12 bg-[#111113] border-b border-white/[0.07] flex items-center justify-between px-5 shrink-0">
+      <nav className="h-12 bg-surface border-b border-zinc-800 flex items-center justify-between px-5 shrink-0">
         <span className="text-zinc-100 font-semibold text-sm flex items-center gap-2.5">
           <LogoMark /> DB Studio
         </span>
         <div className="flex items-center gap-1">
           <span className="text-xs text-zinc-600 font-mono mr-2 select-none">{user.username}</span>
-          {isAdmin && (
+          {isAdmin && onAdmin && (
             <button
               onClick={onAdmin}
               className="text-xs text-zinc-500 hover:text-violet-300 px-2.5 py-1.5 rounded-lg hover:bg-violet-500/10 border border-transparent hover:border-violet-500/20 transition-all font-medium"
@@ -75,10 +75,18 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
               Admin Panel
             </button>
           )}
+          {onPlatform && (
+            <button
+              onClick={onPlatform}
+              className="text-xs text-zinc-500 hover:text-amber-300 px-2.5 py-1.5 rounded-lg hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all font-medium"
+            >
+              Platform
+            </button>
+          )}
           {onClose ? (
             <button
               onClick={onClose}
-              className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-all font-medium"
+              className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800/15 border border-transparent hover:border-zinc-800 transition-all font-medium"
             >
               Cancel
             </button>
@@ -104,7 +112,7 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
 
           {/* Tabs — admin only */}
           {isAdmin && (
-            <div className="flex gap-1 mb-6 border-b border-white/[0.07]">
+            <div className="flex gap-1 mb-6 border-b border-zinc-800">
               {[['shared', 'Shared'], ['direct', 'Direct Connect']].map(([key, label]) => (
                 <button
                   key={key}
@@ -141,8 +149,8 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
               )}
 
               {!loading && connections.length === 0 && !error && (
-                <div className="text-center py-16 bg-[#111113] border border-white/[0.07] rounded-2xl">
-                  <div className="w-12 h-12 rounded-2xl bg-[#1c1c1f] border border-white/[0.07] flex items-center justify-center mx-auto mb-4">
+                <div className="text-center py-16 bg-surface border border-zinc-800 rounded-2xl">
+                  <div className="w-12 h-12 rounded-2xl bg-raised border border-zinc-800 flex items-center justify-center mx-auto mb-4">
                     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="text-zinc-600">
                       <path d="M11 3C7 3 4 5.5 4 8.5s3 5.5 7 5.5 7-2.5 7-5.5S15 3 11 3z" stroke="currentColor" strokeWidth="1.4"/>
                       <path d="M4 8.5v5C4 16.5 7 19 11 19s7-2.5 7-5.5v-5" stroke="currentColor" strokeWidth="1.4"/>
@@ -169,7 +177,7 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
                   return (
                     <div
                       key={conn.id}
-                      className="group bg-[#111113] border border-white/[0.07] hover:border-white/[0.12] rounded-2xl px-5 py-4 flex items-center gap-4 transition-all duration-150"
+                      className="group bg-surface border border-zinc-800 hover:border-zinc-700 rounded-2xl px-5 py-4 flex items-center gap-4 transition-all duration-150"
                     >
                       {/* DB dot */}
                       <div
@@ -183,7 +191,7 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-zinc-100 text-sm font-medium truncate">{conn.name}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 bg-white/[0.05] text-zinc-500 rounded-md border border-white/[0.07] uppercase tracking-wide font-medium shrink-0">
+                          <span className="text-[10px] px-1.5 py-0.5 bg-white/[0.09] text-zinc-500 rounded-md border border-zinc-800 uppercase tracking-wide font-medium shrink-0">
                             {DB_LABEL[conn.type] || conn.type}
                           </span>
                         </div>
@@ -217,7 +225,7 @@ export default function ConnectionPicker({ user, onConnect, onAdmin, onLogout, o
           )}
 
           {tab === 'direct' && isAdmin && (
-            <div className="bg-[#111113] border border-white/[0.07] rounded-2xl p-5">
+            <div className="bg-surface border border-zinc-800 rounded-2xl p-5">
               <LoginForm onConnect={handleDirectConnect} />
             </div>
           )}

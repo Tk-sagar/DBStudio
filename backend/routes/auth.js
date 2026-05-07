@@ -2,7 +2,7 @@ const express  = require('express');
 const router   = express.Router();
 const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
-const { Tenant, User, Invite, SavedConnection, ConnectionGrant, UserConnectionPin, Otp } = require('../db/app');
+const { Organization, User, Invite, SavedConnection, ConnectionGrant, UserConnectionPin, Otp } = require('../db/app');
 const { decrypt }        = require('../utils/crypto');
 const { createAdapter }  = require('../adapters');
 const registry           = require('../adapters/registry');
@@ -26,7 +26,7 @@ function slugify(name) {
 async function uniqueSlug(base) {
   let slug = slugify(base);
   let n = 1;
-  while (await Tenant.exists({ slug })) {
+  while (await Organization.exists({ slug })) {
     slug = `${slugify(base)}-${n++}`;
   }
   return slug;
@@ -38,8 +38,8 @@ function sessionUser(row, tenant = null) {
     username:    row.username,
     email:       row.email || null,
     role:        row.role,
-    tenant_id:   tenant ? tenant._id.toString() : (row.tenant_id ? row.tenant_id.toString() : null),
-    tenant_name: tenant ? tenant.name : null,
+    org_id:   tenant ? tenant._id.toString() : (row.org_id ? row.org_id.toString() : null),
+    org_name: tenant ? tenant.name : null,
   };
 }
 
@@ -74,7 +74,7 @@ async function restoreConnections(req, userId, role, tenantId) {
     if (connId === '__direct__') continue;
 
     const conn = await SavedConnection.findById(connId).lean();
-    if (!conn || (tenantId && conn.tenant_id?.toString() !== tenantId)) {
+    if (!conn || (tenantId && conn.org_id?.toString() !== tenantId)) {
       await UserConnectionPin.deleteOne({ _id: pin._id }); continue;
     }
 
@@ -120,12 +120,12 @@ async function restoreConnections(req, userId, role, tenantId) {
 
 router.get('/auth/me', async (req, res) => {
   if (!req.session.user) return res.json({ user: null });
-  const { id: userId, role, tenant_id: tenantId } = req.session.user;
+  const { id: userId, role, org_id: tenantId } = req.session.user;
 
-  // Enrich tenant_name if missing from session
-  if (tenantId && !req.session.user.tenant_name) {
-    const t = await Tenant.findById(tenantId).lean();
-    if (t) req.session.user.tenant_name = t.name;
+  // Enrich org_name if missing from session
+  if (tenantId && !req.session.user.org_name) {
+    const t = await Organization.findById(tenantId).lean();
+    if (t) req.session.user.org_name = t.name;
   }
 
   const { openConnections } = await restoreConnections(req, userId, role, tenantId);
@@ -164,25 +164,32 @@ router.post('/auth/setup', async (req, res) => {
     const n = await User.countDocuments();
     if (n > 0) return res.status(400).json({ error: 'Setup already completed.' });
 
-    const { username, password, email } = req.body;
-    if (!username?.trim())                        return res.status(400).json({ error: 'Username is required.' });
-    if (username.trim().length > MAX_USERNAME)     return res.status(400).json({ error: `Username must be at most ${MAX_USERNAME} characters.` });
-    if (!password || password.length < 8)          return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    if (password.length > MAX_PASSWORD)            return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
+    const { orgName, username, password, email } = req.body;
+    if (!orgName?.trim())                          return res.status(400).json({ error: 'Organization name is required.' });
+    if (!username?.trim())                         return res.status(400).json({ error: 'Username is required.' });
+    if (username.trim().length > MAX_USERNAME)      return res.status(400).json({ error: `Username must be at most ${MAX_USERNAME} characters.` });
+    if (!password || password.length < 8)           return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    if (password.length > MAX_PASSWORD)             return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
 
     const emailVal = email?.trim().toLowerCase();
     if (emailVal && !EMAIL_RE.test(emailVal)) return res.status(400).json({ error: 'Invalid email address.' });
+
+    const slug        = await uniqueSlug(orgName.trim());
+    const emailDomain = emailVal ? emailVal.split('@')[1] : null;
+    const tenant = await Organization.create({ name: orgName.trim(), slug, email_domain: emailDomain, plan: 'pro', max_users: 999, max_connections: 999 });
 
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const row  = await User.create({
       username:       username.trim(),
       password_hash:  hash,
       role:           'super_admin',
-      tenant_id:      null,
+      org_id:      tenant._id,
       ...(emailVal && { email: emailVal, email_verified: true }),
     });
 
-    const user = sessionUser(row);
+    await Organization.findByIdAndUpdate(tenant._id, { owner_id: row._id });
+
+    const user = sessionUser(row, tenant);
     req.session.user = user;
     res.json({ user });
   } catch (err) {
@@ -192,7 +199,7 @@ router.post('/auth/setup', async (req, res) => {
   }
 });
 
-// ── POST /auth/register — creates Tenant + tenant_admin ───────────────────────
+// ── POST /auth/register — creates Organization + org admin ───────────────────
 
 router.post('/auth/register', async (req, res) => {
   try {
@@ -206,8 +213,9 @@ router.post('/auth/register', async (req, res) => {
     if (!password || password.length < 8)         return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (password.length > MAX_PASSWORD)           return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
 
-    const slug  = await uniqueSlug(orgName.trim());
-    const tenant = await Tenant.create({ name: orgName.trim(), slug });
+    const slug         = await uniqueSlug(orgName.trim());
+    const emailDomain  = email.trim().toLowerCase().split('@')[1];
+    const tenant = await Organization.create({ name: orgName.trim(), slug, email_domain: emailDomain });
 
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const row  = await User.create({
@@ -215,12 +223,12 @@ router.post('/auth/register', async (req, res) => {
       email:          email.trim().toLowerCase(),
       email_verified: false,
       password_hash:  hash,
-      role:           'tenant_admin',
-      tenant_id:      tenant._id,
+      role:           'org_admin',
+      org_id:      tenant._id,
     });
 
     // Link tenant owner
-    await Tenant.findByIdAndUpdate(tenant._id, { owner_id: row._id });
+    await Organization.findByIdAndUpdate(tenant._id, { owner_id: row._id });
 
     const code = await issueOtp(row._id, 'verify_email');
     await sendVerifyEmail(row.email, code);
@@ -264,7 +272,7 @@ router.post('/auth/login', async (req, res) => {
     }
 
     let tenant = null;
-    if (row.tenant_id) tenant = await Tenant.findById(row.tenant_id).lean();
+    if (row.org_id) tenant = await Organization.findById(row.org_id).lean();
 
     const user = sessionUser(row, tenant);
     req.session.regenerate((err) => {
@@ -293,7 +301,7 @@ router.post('/auth/verify-email', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'User not found.' });
 
     let tenant = null;
-    if (row.tenant_id) tenant = await Tenant.findById(row.tenant_id).lean();
+    if (row.org_id) tenant = await Organization.findById(row.org_id).lean();
 
     const user = sessionUser(row, tenant);
     req.session.regenerate((err) => {
@@ -391,7 +399,7 @@ router.post('/auth/reset-password', async (req, res) => {
 router.get('/auth/invite/:token', async (req, res) => {
   try {
     const invite = await Invite.findOne({ token: req.params.token, used: false })
-      .populate('tenant_id', 'name')
+      .populate('org_id', 'name')
       .lean();
     if (!invite || new Date(invite.expires_at) < new Date()) {
       return res.status(404).json({ error: 'Invite link is invalid or has expired.' });
@@ -399,7 +407,7 @@ router.get('/auth/invite/:token', async (req, res) => {
     res.json({
       email:       invite.email,
       role:        invite.role,
-      tenant_name: invite.tenant_id?.name || '',
+      org_name: invite.org_id?.name || '',
     });
   } catch (err) {
     console.error('[auth/invite]', err.message);
@@ -420,7 +428,7 @@ router.post('/auth/join', async (req, res) => {
     if (password.length > MAX_PASSWORD)        return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD} characters.` });
 
     const invite = await Invite.findOne({ token, used: false })
-      .populate('tenant_id')
+      .populate('org_id')
       .lean();
     if (!invite || new Date(invite.expires_at) < new Date()) {
       return res.status(400).json({ error: 'Invite link is invalid or has expired.' });
@@ -437,12 +445,12 @@ router.post('/auth/join', async (req, res) => {
       email_verified: true, // invite = verified email
       password_hash:  hash,
       role:           invite.role,
-      tenant_id:      invite.tenant_id._id,
+      org_id:      invite.org_id._id,
     });
 
     await Invite.findByIdAndUpdate(invite._id, { used: true });
 
-    const tenant = invite.tenant_id;
+    const tenant = invite.org_id;
     const user   = sessionUser(row, tenant);
     req.session.regenerate((err) => {
       if (err) {
@@ -464,9 +472,9 @@ router.post('/auth/join', async (req, res) => {
 router.get('/auth/users', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Authentication required.' });
   try {
-    const { id: userId, tenant_id } = req.session.user;
+    const { id: userId, org_id } = req.session.user;
     const users = await User
-      .find({ _id: { $ne: userId }, tenant_id: tenant_id || null }, 'username')
+      .find({ _id: { $ne: userId }, org_id: org_id || null }, 'username')
       .sort({ username: 1 }).lean();
     res.json({ users: users.map(u => ({ id: u._id.toString(), username: u.username })) });
   } catch (err) {

@@ -2,7 +2,7 @@ import LoginForm from '../components/LoginForm.jsx';
 
 export default function Login({ onConnect }) {
   return (
-    <div className="min-h-full bg-[#0b0e17] flex items-center justify-center p-6 font-sans">
+    <div className="min-h-full bg-base flex items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
         {/* Brand header */}
         <div className="text-center mb-8">

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import api from '../api/client.js';
+import { useTheme } from '../hooks/useTheme.jsx';
 
 const DB_COLOR = { mysql: '#fb923c', mariadb: '#fb923c', postgres: '#38bdf8', postgresql: '#38bdf8', sqlite: '#4ade80' };
 
@@ -18,13 +19,46 @@ function EyeIcon({ open }) {
   );
 }
 
-const inputCls = 'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-600 transition-all pr-10';
-
+const inputCls = 'w-full bg-base border border-zinc-800 text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-500 transition-all pr-10';
 const EMPTY_PWD = { current: '', newPwd: '', confirm: '', showCurrent: false, showNew: false, showConfirm: false, saving: false, error: '', success: false };
 
+const ROLE_LABEL = { super_admin: 'Super Admin', org_admin: 'Admin', user: 'Member' };
+
+function SunIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
+      <path d="M7 1.5V3M7 11v1.5M1.5 7H3M11 7h1.5M2.9 2.9l1.1 1.1M10 10l1.1 1.1M2.9 11.1 4 10M10 4l1.1-1.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M11.5 9a6 6 0 01-7.5-7.5A5.5 5.5 0 1011.5 9z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export default function Navbar({ dbInfo, user, onDisconnect, onLogout, onAdmin, openConnections = [], activeConnId, connectingId, onSwitchConnection, onCloseConnection, onAddConnection }) {
-  const [showPwdModal, setShowPwdModal] = useState(false);
-  const [pwdForm,      setPwdForm]      = useState(EMPTY_PWD);
+  const [showPwdModal,  setShowPwdModal]  = useState(false);
+  const [pwdForm,       setPwdForm]       = useState(EMPTY_PWD);
+  const [showProfile,   setShowProfile]   = useState(false);
+  const profileRef = useRef(null);
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const isAdmin = user?.role === 'org_admin';
+  const initials = user?.username ? user.username.slice(0, 2).toUpperCase() : '??';
+
+  useEffect(() => {
+    if (!showProfile) return;
+    const handler = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setShowProfile(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showProfile]);
 
   const handleDisconnectAll = async () => {
     try { await api.delete('/disconnect'); } catch (_) {}
@@ -47,11 +81,12 @@ export default function Navbar({ dbInfo, user, onDisconnect, onLogout, onAdmin, 
     }
   };
 
-  const isAdmin = user?.role === 'admin';
+  const openChangePwd = () => { setShowProfile(false); setShowPwdModal(true); };
+  const handleAdminClick = () => { setShowProfile(false); onAdmin?.(); };
 
   return (
     <>
-    <nav className="h-12 bg-[#111113] border-b border-white/[0.07] flex items-center justify-between px-5 shrink-0 z-20">
+    <nav className="h-12 bg-surface border-b border-zinc-800 flex items-center justify-between px-5 shrink-0 z-20">
       {/* Brand */}
       <div className="flex items-center shrink-0">
         <span className="text-zinc-100 font-semibold text-sm tracking-tight flex items-center gap-2.5">
@@ -82,77 +117,123 @@ export default function Navbar({ dbInfo, user, onDisconnect, onLogout, onAdmin, 
               key={conn.id}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all shrink-0 group ${
                 isActive
-                  ? 'bg-[#1c1c1f] text-zinc-200 border border-white/[0.10]'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'
+                  ? 'bg-raised text-zinc-200 border border-zinc-700/70'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/20 border border-transparent'
               }`}
             >
               {isBusy ? (
                 <span className="w-1.5 h-1.5 border border-zinc-600 border-t-violet-400 rounded-full animate-spin-fast shrink-0" />
               ) : (
-                <span
-                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{
-                    backgroundColor: isActive ? dotColor : '#52525b',
-                    boxShadow: isActive ? `0 0 5px ${dotColor}60` : 'none',
-                  }}
-                />
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{
+                  backgroundColor: isActive ? dotColor : '#52525b',
+                  boxShadow: isActive ? `0 0 5px ${dotColor}60` : 'none',
+                }} />
               )}
               <button
                 onClick={() => !isActive && !isBusy && onSwitchConnection?.(conn.id)}
                 className="max-w-[110px] truncate leading-none text-left"
                 title={conn.name}
                 disabled={isActive || isBusy}
-              >
-                {conn.name}
-              </button>
+              >{conn.name}</button>
               <button
                 onClick={(e) => { e.stopPropagation(); onCloseConnection?.(conn.id); }}
-                className="text-zinc-700 hover:text-zinc-400 transition-colors leading-none ml-0.5 text-sm opacity-0 group-hover:opacity-100"
+                className="text-zinc-500 hover:text-zinc-400 transition-colors leading-none ml-0.5 text-sm opacity-0 group-hover:opacity-100"
                 title="Close this connection"
               >×</button>
             </div>
           );
         })}
-
-        {/* Add connection */}
         <button
           onClick={onAddConnection}
-          className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all shrink-0 text-base leading-none"
+          className="w-6 h-6 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/15 transition-all shrink-0 text-base leading-none"
           title="Open another connection"
         >+</button>
       </div>
 
-      {/* Right: user + actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        {user && <span className="text-xs text-zinc-600 font-mono mr-2 select-none">{user.username}</span>}
-        {isAdmin && onAdmin && (
-          <button
-            onClick={onAdmin}
-            className="text-xs text-zinc-500 hover:text-violet-300 px-2.5 py-1.5 rounded-lg hover:bg-violet-500/10 border border-transparent hover:border-violet-500/20 transition-all font-medium"
-          >Admin</button>
-        )}
+      {/* Right: theme toggle + disconnect + profile */}
+      <div className="flex items-center gap-2 shrink-0">
         <button
-          onClick={() => setShowPwdModal(true)}
-          className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-all font-medium"
-        >Change Pwd</button>
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/20 border border-zinc-800 transition-all"
+          title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {resolvedTheme === 'dark' ? <SunIcon /> : <MoonIcon />}
+        </button>
         <button
           onClick={handleDisconnectAll}
-          className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-all font-medium"
+          className="text-xs text-zinc-500 hover:text-zinc-300 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800/20 border border-zinc-700 transition-all font-medium"
         >Disconnect</button>
-        <button
-          onClick={onLogout}
-          className="text-xs text-zinc-500 hover:text-red-400 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all font-medium"
-        >Log out</button>
+
+        {/* Profile button */}
+        <div className="relative" ref={profileRef}>
+          <button
+            onClick={() => setShowProfile(p => !p)}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold transition-all select-none ${
+              showProfile
+                ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/40'
+                : 'bg-raised text-zinc-400 hover:text-zinc-200 hover:bg-overlay border border-zinc-800'
+            }`}
+          >{initials}</button>
+
+          {showProfile && (
+            <div className="absolute right-0 top-9 w-52 bg-surface border border-zinc-700/60 rounded-xl shadow-modal z-50 overflow-hidden">
+              {/* User info header */}
+              <div className="px-4 py-3 border-b border-zinc-800">
+                <p className="text-zinc-200 text-xs font-semibold truncate">{user?.username}</p>
+                {user?.email && <p className="text-zinc-600 text-[11px] truncate mt-0.5">{user.email}</p>}
+                <span className={`inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded-md font-medium border ${
+                  user?.role === 'org_admin'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
+                }`}>{ROLE_LABEL[user?.role] || user?.role}</span>
+              </div>
+
+              {/* Menu items */}
+              <div className="py-1">
+                {isAdmin && onAdmin && (
+                  <button onClick={handleAdminClick}
+                    className="w-full text-left px-4 py-2 text-xs text-zinc-400 hover:text-violet-300 hover:bg-violet-500/[0.07] transition-colors flex items-center gap-2.5">
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                      <rect x="1" y="1" width="11" height="11" rx="3" stroke="currentColor" strokeWidth="1.2"/>
+                      <path d="M4 6.5h5M4 4.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                    </svg>
+                    Admin Panel
+                  </button>
+                )}
+                <button onClick={openChangePwd}
+                  className="w-full text-left px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/20 transition-colors flex items-center gap-2.5">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <rect x="3" y="6" width="7" height="5.5" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+                    <path d="M4.5 6V4.5a2 2 0 014 0V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  Change Password
+                </button>
+              </div>
+
+              <div className="border-t border-zinc-800 py-1">
+                <button onClick={onLogout}
+                  className="w-full text-left px-4 py-2 text-xs text-zinc-500 hover:text-red-400 hover:bg-red-500/[0.06] transition-colors flex items-center gap-2.5">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M8 2H10.5C11.05 2 11.5 2.45 11.5 3V10C11.5 10.55 11.05 11 10.5 11H8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                    <path d="M5 9.5L8 6.5L5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1.5 6.5H8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  Log out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
 
     {/* Change password modal */}
     {showPwdModal && (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-[#111113] border border-white/[0.09] rounded-2xl w-full max-w-sm">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
+        <div className="bg-surface border border-zinc-700/60 rounded-2xl w-full max-w-sm">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
             <h3 className="text-zinc-100 text-sm font-semibold">Change Password</h3>
-            <button onClick={closePwdModal} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all text-lg leading-none">×</button>
+            <button onClick={closePwdModal} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/15 transition-all text-lg leading-none">×</button>
           </div>
           <div className="p-5">
             {pwdForm.success ? (
@@ -165,57 +246,31 @@ export default function Navbar({ dbInfo, user, onDisconnect, onLogout, onAdmin, 
               </div>
             ) : (
               <form onSubmit={handleChangePwd} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Current password</label>
-                  <div className="relative">
-                    <input
-                      type={pwdForm.showCurrent ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      value={pwdForm.current}
-                      onChange={e => setPwdForm(p => ({ ...p, current: e.target.value, error: '' }))}
-                      placeholder="Your current password"
-                      required
-                      className={inputCls}
-                    />
-                    <button type="button" tabIndex={-1} onClick={() => setPwdForm(p => ({ ...p, showCurrent: !p.showCurrent }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
-                      <EyeIcon open={pwdForm.showCurrent} />
-                    </button>
+                {[
+                  { label: 'Current password', key: 'current', show: 'showCurrent', auto: 'current-password', ph: 'Your current password' },
+                  { label: 'New password', key: 'newPwd', show: 'showNew', auto: 'new-password', ph: 'At least 8 characters' },
+                  { label: 'Confirm new password', key: 'confirm', show: 'showConfirm', auto: 'new-password', ph: 'Re-enter new password' },
+                ].map(({ label, key, show, auto, ph }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">{label}</label>
+                    <div className="relative">
+                      <input
+                        type={pwdForm[show] ? 'text' : 'password'}
+                        autoComplete={auto}
+                        value={pwdForm[key]}
+                        onChange={e => setPwdForm(p => ({ ...p, [key]: e.target.value, error: '' }))}
+                        placeholder={ph}
+                        required
+                        className={inputCls}
+                      />
+                      <button type="button" tabIndex={-1}
+                        onClick={() => setPwdForm(p => ({ ...p, [show]: !p[show] }))}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
+                        <EyeIcon open={pwdForm[show]} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">New password</label>
-                  <div className="relative">
-                    <input
-                      type={pwdForm.showNew ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      value={pwdForm.newPwd}
-                      onChange={e => setPwdForm(p => ({ ...p, newPwd: e.target.value, error: '' }))}
-                      placeholder="At least 8 characters"
-                      required
-                      className={inputCls}
-                    />
-                    <button type="button" tabIndex={-1} onClick={() => setPwdForm(p => ({ ...p, showNew: !p.showNew }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
-                      <EyeIcon open={pwdForm.showNew} />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm new password</label>
-                  <div className="relative">
-                    <input
-                      type={pwdForm.showConfirm ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      value={pwdForm.confirm}
-                      onChange={e => setPwdForm(p => ({ ...p, confirm: e.target.value, error: '' }))}
-                      placeholder="Re-enter new password"
-                      required
-                      className={inputCls}
-                    />
-                    <button type="button" tabIndex={-1} onClick={() => setPwdForm(p => ({ ...p, showConfirm: !p.showConfirm }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
-                      <EyeIcon open={pwdForm.showConfirm} />
-                    </button>
-                  </div>
-                </div>
+                ))}
                 {pwdForm.error && (
                   <div className="flex items-center gap-2 bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5">
                     <svg className="text-red-400 shrink-0" width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.3"/><path d="M6 4v2.5M6 8h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
@@ -226,7 +281,7 @@ export default function Navbar({ dbInfo, user, onDisconnect, onLogout, onAdmin, 
                   <button type="submit" disabled={pwdForm.saving} className="flex-1 py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all">
                     {pwdForm.saving ? 'Saving…' : 'Change Password'}
                   </button>
-                  <button type="button" onClick={closePwdModal} className="px-4 py-2.5 bg-[#1c1c1f] text-zinc-400 border border-white/[0.08] text-sm font-medium rounded-xl hover:bg-[#232329] hover:text-zinc-300 transition-all">Cancel</button>
+                  <button type="button" onClick={closePwdModal} className="px-4 py-2.5 bg-raised text-zinc-400 border border-zinc-800 text-sm font-medium rounded-xl hover:bg-overlay hover:text-zinc-300 transition-all">Cancel</button>
                 </div>
               </form>
             )}

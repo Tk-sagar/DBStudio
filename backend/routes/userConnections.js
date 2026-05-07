@@ -10,11 +10,11 @@ router.use(requireAppAuth);
 
 router.get('/my/connections', async (req, res) => {
   try {
-    const { id: userId, role, tenant_id } = req.session.user;
+    const { id: userId, role, org_id } = req.session.user;
 
-    if (role === 'tenant_admin') {
+    if (role === 'org_admin') {
       const rows = await SavedConnection
-        .find({ tenant_id }, 'name type database_name created_at')
+        .find({ org_id }, 'name type database_name created_at')
         .sort({ created_at: -1 })
         .lean();
       return res.json({
@@ -58,7 +58,7 @@ router.get('/my/connections', async (req, res) => {
 });
 
 async function loadAndConnectAdapter(req, connId) {
-  const { id: userId, role, tenant_id } = req.session.user;
+  const { id: userId, role, org_id } = req.session.user;
 
   let permission = 'full';
   if (role === 'user') {
@@ -69,8 +69,8 @@ async function loadAndConnectAdapter(req, connId) {
 
   const conn = await SavedConnection.findById(connId).lean();
   if (!conn) throw Object.assign(new Error('Connection not found.'), { status: 404 });
-  // Tenant isolation: non-super_admin can only access their tenant's connections
-  if (role !== 'super_admin' && tenant_id && conn.tenant_id?.toString() !== tenant_id) {
+  // Org isolation: non-super_admin can only access their organization's connections
+  if (role !== 'super_admin' && org_id && conn.org_id?.toString() !== org_id) {
     throw Object.assign(new Error('Connection not found.'), { status: 404 });
   }
 

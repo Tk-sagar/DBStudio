@@ -23,11 +23,11 @@ function generatePassword() {
   return Array.from(arr).map(b => chars[b % chars.length]).join('');
 }
 
-const input   = 'w-full bg-[#0d0d10] border border-white/[0.08] text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-700 transition-all';
+const input   = 'w-full bg-base border border-zinc-800 text-zinc-100 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 placeholder-zinc-500 transition-all';
 const select  = input + ' cursor-pointer';
 const label   = 'block text-xs font-medium text-zinc-400 mb-1.5';
 const btnPrim = 'flex-1 py-2.5 bg-gradient-violet hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all';
-const btnSec  = 'px-4 py-2.5 bg-[#1c1c1f] text-zinc-400 border border-white/[0.08] text-sm font-medium rounded-xl hover:bg-[#232329] hover:text-zinc-300 transition-all';
+const btnSec  = 'px-4 py-2.5 bg-raised text-zinc-400 border border-zinc-800 text-sm font-medium rounded-xl hover:bg-overlay hover:text-zinc-300 transition-all';
 
 const DB_TYPES = ['mysql', 'mariadb', 'postgres', 'sqlite'];
 const DB_LABEL = { mysql: 'MySQL', mariadb: 'MariaDB', postgres: 'PostgreSQL', postgresql: 'PostgreSQL', sqlite: 'SQLite' };
@@ -41,10 +41,10 @@ const PERM_STYLE = {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#111113] border border-white/[0.09] rounded-2xl w-full max-w-md shadow-modal">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+      <div className="bg-surface border border-zinc-700/60 rounded-2xl w-full max-w-md shadow-modal">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <h3 className="text-zinc-100 text-sm font-semibold">{title}</h3>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all text-lg leading-none">×</button>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/15 transition-all text-lg leading-none">×</button>
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -64,10 +64,10 @@ function ErrorBanner({ msg, onDismiss }) {
 
 function RoleBadge({ role }) {
   const styles = {
-    tenant_admin: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
+    org_admin: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
     user:         'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
   };
-  const labels = { tenant_admin: 'admin', user: 'user' };
+  const labels = { org_admin: 'Admin', user: 'Member' };
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wide ${styles[role] || styles.user}`}>
       {labels[role] || role}
@@ -90,13 +90,16 @@ function TenantInfoBar() {
     : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20';
 
   return (
-    <div className="flex items-center gap-4 bg-[#111113] border border-white/[0.07] rounded-2xl px-5 py-4 mb-7">
+    <div className="flex items-center gap-4 bg-surface border border-zinc-800 rounded-2xl px-5 py-4 mb-7">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="text-zinc-100 text-sm font-semibold truncate">{info.name}</span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wide ${planStyle}`}>{info.plan}</span>
         </div>
         <p className="text-zinc-600 text-xs font-mono">{info.slug}</p>
+        {info.email_domain && (
+          <p className="text-zinc-600 text-xs mt-0.5">Allowed domain: <span className="text-zinc-400 font-mono">@{info.email_domain}</span></p>
+        )}
       </div>
       <div className="flex items-center gap-5 text-xs text-right shrink-0">
         <div>
@@ -178,10 +181,10 @@ function UsersTab({ currentUserId }) {
           <span className="w-4 h-4 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />Loading…
         </div>
       ) : (
-        <div className="bg-[#111113] border border-white/[0.07] rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/[0.06]">
+              <tr className="border-b border-zinc-700/80">
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Username</th>
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Email</th>
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Role</th>
@@ -191,7 +194,7 @@ function UsersTab({ currentUserId }) {
             </thead>
             <tbody>
               {users.map((u, i) => (
-                <tr key={u.id} className={`border-b border-white/[0.05] last:border-0 hover:bg-white/[0.02] transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
+                <tr key={u.id} className={`border-b border-zinc-700/60 last:border-0 hover:bg-zinc-800/15 transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
                   <td className="px-5 py-3 text-zinc-200 font-mono font-medium">{u.username}</td>
                   <td className="px-5 py-3 text-zinc-500 text-[11px]">
                     {u.email ? (
@@ -199,21 +202,21 @@ function UsersTab({ currentUserId }) {
                         {u.email}
                         {u.email_verified
                           ? <span className="text-emerald-500 text-[9px] font-semibold">✓</span>
-                          : <span className="text-zinc-700 text-[9px]">unverified</span>}
+                          : <span className="text-zinc-500 text-[9px]">unverified</span>}
                       </span>
-                    ) : <span className="text-zinc-700">—</span>}
+                    ) : <span className="text-zinc-500">—</span>}
                   </td>
                   <td className="px-5 py-3"><RoleBadge role={u.role} /></td>
                   <td className="px-5 py-3 text-zinc-600">{new Date(u.created_at).toLocaleDateString()}</td>
                   <td className="px-5 py-3">
                     <div className="flex gap-1.5 justify-end">
                       <button onClick={() => { setEditUser({ id: u.id, role: u.role, password: '' }); setFormErr(''); }}
-                        className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all">Edit</button>
+                        className="text-xs px-2.5 py-1 bg-raised hover:bg-overlay text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-medium transition-all">Edit</button>
                       <button onClick={() => setResetModal({ id: u.id, username: u.username, password: '', showPwd: false, isGenerated: false, saving: false, error: '', done: false, generatedPwd: null })}
-                        className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-amber-500/10 text-zinc-500 hover:text-amber-400 border border-white/[0.08] hover:border-amber-500/25 rounded-lg font-medium transition-all">Reset Pwd</button>
+                        className="text-xs px-2.5 py-1 bg-raised hover:bg-amber-500/10 text-zinc-500 hover:text-amber-400 border border-zinc-800 hover:border-amber-500/25 rounded-lg font-medium transition-all">Reset Pwd</button>
                       {u.id !== currentUserId && (
                         <button onClick={() => handleDelete(u.id)}
-                          className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-white/[0.08] hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
+                          className="text-xs px-2.5 py-1 bg-raised hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
                       )}
                     </div>
                   </td>
@@ -236,7 +239,7 @@ function UsersTab({ currentUserId }) {
               {resetModal.generatedPwd && (
                 <>
                   <p className="text-zinc-600 text-xs">Generated password — share securely:</p>
-                  <div className="bg-[#0d0d10] border border-white/[0.08] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
+                  <div className="bg-base border border-zinc-800 rounded-xl px-4 py-3.5 flex items-center justify-between gap-3">
                     <span className="text-violet-300 font-mono text-sm tracking-widest select-all">{resetModal.generatedPwd}</span>
                     <button type="button" onClick={() => navigator.clipboard.writeText(resetModal.generatedPwd)}
                       className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 text-white rounded-lg font-medium transition-all shrink-0">Copy</button>
@@ -279,11 +282,11 @@ function UsersTab({ currentUserId }) {
               <label className={label}>Role</label>
               <select className={select} value={editUser.role} onChange={e => setEditUser(p => ({ ...p, role: e.target.value }))}>
                 <option value="user">Member</option>
-                <option value="tenant_admin">Admin</option>
+                <option value="org_admin">Admin</option>
               </select>
             </div>
             <div>
-              <label className={label}>New password <span className="text-zinc-700 font-normal">(leave blank to keep current)</span></label>
+              <label className={label}>New password <span className="text-zinc-500 font-normal">(leave blank to keep current)</span></label>
               <input type="password" className={input} value={editUser.password}
                 onChange={e => setEditUser(p => ({ ...p, password: e.target.value }))} placeholder="New password (optional)" />
             </div>
@@ -301,18 +304,25 @@ function UsersTab({ currentUserId }) {
 
 // ── Invites Tab ───────────────────────────────────────────────────────────────
 function InvitesTab() {
-  const [invites,  setInvites]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState('');
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [form,     setForm]     = useState({ email: '', role: 'user' });
-  const [saving,   setSaving]   = useState(false);
-  const [formErr,  setFormErr]  = useState('');
+  const [invites,      setInvites]      = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState('');
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [form,         setForm]         = useState({ email: '', role: 'user' });
+  const [saving,       setSaving]       = useState(false);
+  const [formErr,      setFormErr]      = useState('');
+  const [emailDomain,  setEmailDomain]  = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get('/admin/invites')
-      .then(r => setInvites(r.data.invites || []))
+    Promise.all([
+      api.get('/admin/invites'),
+      api.get('/admin/tenant'),
+    ])
+      .then(([iRes, tRes]) => {
+        setInvites(iRes.data.invites || []);
+        setEmailDomain(tRes.data.tenant?.email_domain || null);
+      })
       .catch(err => setError(err.response?.data?.error || 'Failed.'))
       .finally(() => setLoading(false));
   }, []);
@@ -360,15 +370,15 @@ function InvitesTab() {
           <span className="w-4 h-4 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />Loading…
         </div>
       ) : invites.length === 0 ? (
-        <div className="text-center py-14 bg-[#111113] border border-white/[0.07] rounded-2xl">
+        <div className="text-center py-14 bg-surface border border-zinc-800 rounded-2xl">
           <p className="text-zinc-400 text-sm font-medium mb-1">No pending invites</p>
-          <p className="text-zinc-600 text-xs">Invite teammates by email — they'll get a link to join your workspace.</p>
+          <p className="text-zinc-600 text-xs">Invite teammates by email — they'll get a link to join your organization.</p>
         </div>
       ) : (
-        <div className="bg-[#111113] border border-white/[0.07] rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-white/[0.06]">
+              <tr className="border-b border-zinc-700/80">
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Email</th>
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Role</th>
                 <th className="text-left px-5 py-3 text-zinc-600 font-semibold uppercase tracking-wider text-[10px]">Invited by</th>
@@ -378,14 +388,14 @@ function InvitesTab() {
             </thead>
             <tbody>
               {invites.map((inv, i) => (
-                <tr key={inv.id} className={`border-b border-white/[0.05] last:border-0 hover:bg-white/[0.02] ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
+                <tr key={inv.id} className={`border-b border-zinc-700/60 last:border-0 hover:bg-zinc-800/15 ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
                   <td className="px-5 py-3 text-zinc-200 font-mono">{inv.email}</td>
                   <td className="px-5 py-3"><RoleBadge role={inv.role} /></td>
                   <td className="px-5 py-3 text-zinc-500 font-mono">{inv.invited_by || '—'}</td>
                   <td className="px-5 py-3 text-zinc-600">{daysLeft(inv.expires_at)}</td>
                   <td className="px-5 py-3">
                     <button onClick={() => handleRevoke(inv.id)}
-                      className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-white/[0.08] hover:border-red-500/20 rounded-lg font-medium transition-all">
+                      className="text-xs px-2.5 py-1 bg-raised hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/20 rounded-lg font-medium transition-all">
                       Revoke
                     </button>
                   </td>
@@ -400,16 +410,19 @@ function InvitesTab() {
         <Modal title="Invite member" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleInvite} className="space-y-4">
             <div>
-              <label className={label}>Email address</label>
+              <label className={label}>
+                Email address
+                {emailDomain && <span className="ml-1.5 text-zinc-600 font-mono font-normal">@{emailDomain} only</span>}
+              </label>
               <input autoFocus type="email" className={input} value={form.email}
                 onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                placeholder="colleague@company.com" required />
+                placeholder={emailDomain ? `colleague@${emailDomain}` : 'colleague@company.com'} required />
             </div>
             <div>
               <label className={label}>Role</label>
               <select className={select} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
                 <option value="user">Member — regular user</option>
-                <option value="tenant_admin">Admin — can manage users and connections</option>
+                <option value="org_admin">Admin — can manage users and connections</option>
               </select>
             </div>
             <p className="text-zinc-600 text-xs leading-relaxed -mt-1">
@@ -472,30 +485,30 @@ function GrantsPanel({ conn, onClose }) {
   };
 
   return (
-    <div className="mt-3 bg-[#0d0d10] border border-white/[0.07] rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+    <div className="mt-3 bg-base border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/80">
         <div>
           <span className="text-zinc-300 text-xs font-semibold">Access grants</span>
-          <p className="text-zinc-700 text-[10px] mt-0.5">{grants.length} member{grants.length !== 1 ? 's' : ''} with access</p>
+          <p className="text-zinc-500 text-[10px] mt-0.5">{grants.length} member{grants.length !== 1 ? 's' : ''} with access</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setShowAdd(true); setFormErr(''); }} disabled={eligibleUsers.length === 0}
             className="text-xs px-3 py-1.5 bg-gradient-violet hover:opacity-90 disabled:opacity-40 text-white rounded-lg font-medium transition-all">+ Grant</button>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all text-lg leading-none">×</button>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/15 transition-all text-lg leading-none">×</button>
         </div>
       </div>
       <div className="p-3">
         <ErrorBanner msg={error} onDismiss={() => setError('')} />
         {loading ? <p className="text-zinc-600 text-xs py-2">Loading…</p>
-        : grants.length === 0 ? <p className="text-zinc-700 text-xs py-2">No grants yet — click + Grant to share this connection.</p>
+        : grants.length === 0 ? <p className="text-zinc-500 text-xs py-2">No grants yet — click + Grant to share this connection.</p>
         : (
           <div className="space-y-1.5">
             {grants.map(g => (
-              <div key={g.id} className="flex items-center gap-3 bg-[#111113] border border-white/[0.07] rounded-xl px-3.5 py-2.5">
+              <div key={g.id} className="flex items-center gap-3 bg-surface border border-zinc-800 rounded-xl px-3.5 py-2.5">
                 <span className="text-zinc-200 text-xs font-mono font-medium flex-1 truncate">{g.username}</span>
                 <RoleBadge role={g.role} />
                 <select value={g.permission} onChange={e => handlePermChange(g.user_id, e.target.value)}
-                  className="bg-[#0d0d10] border border-white/[0.08] text-zinc-300 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500/40 cursor-pointer">
+                  className="bg-base border border-zinc-800 text-zinc-300 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-violet-500/40 cursor-pointer">
                   <option value="read">read</option>
                   <option value="write">write</option>
                   <option value="full">full</option>
@@ -536,6 +549,70 @@ function GrantsPanel({ conn, onClose }) {
   );
 }
 
+// ── Connection form (module-level so identity is stable across re-renders) ─────
+function ConnForm({ values, onChange, onSubmit, submitLabel, formErr, onDismissErr, saving, onCancel }) {
+  const isSQLite = values.type === 'sqlite';
+  const handleTypeChange = (type) => {
+    const defaults = { mysql: '3306', mariadb: '3306', postgres: '5432', sqlite: '' };
+    onChange('type', type);
+    onChange('port', defaults[type] || '');
+  };
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div>
+        <label className={label}>Connection name</label>
+        <input className={input} value={values.name} onChange={e => onChange('name', e.target.value)} placeholder="My Database" required />
+      </div>
+      <div>
+        <label className={label}>Type</label>
+        <select className={select} value={values.type} onChange={e => handleTypeChange(e.target.value)}>
+          {DB_TYPES.map(t => <option key={t} value={t}>{DB_LABEL[t]}</option>)}
+        </select>
+      </div>
+      {!isSQLite && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className={label}>Host</label>
+              <input className={input} value={values.host} onChange={e => onChange('host', e.target.value)} placeholder="localhost" />
+            </div>
+            <div>
+              <label className={label}>Port</label>
+              <input className={input} value={values.port} onChange={e => onChange('port', e.target.value)} placeholder="3306" />
+            </div>
+          </div>
+          <div>
+            <label className={label}>Username</label>
+            <input className={input} value={values.username} onChange={e => onChange('username', e.target.value)} placeholder="root" />
+          </div>
+          <div>
+            <label className={label}>Password{submitLabel !== 'Create' && <span className="text-zinc-500 font-normal ml-1">(blank = unchanged)</span>}</label>
+            <input type="password" className={input} value={values.password} onChange={e => onChange('password', e.target.value)}
+              placeholder={submitLabel !== 'Create' ? 'Unchanged' : 'password'} />
+          </div>
+        </>
+      )}
+      <div>
+        <label className={label}>{isSQLite ? 'File path' : 'Database name'}</label>
+        <input className={input} value={values.database} onChange={e => onChange('database', e.target.value)}
+          placeholder={isSQLite ? '/data/mydb.sqlite' : 'mydb'} required />
+      </div>
+      {!isSQLite && (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input type="checkbox" checked={values.use_ssl || false} onChange={e => onChange('use_ssl', e.target.checked)}
+            className="w-4 h-4 rounded border border-zinc-700 bg-base accent-violet-500 cursor-pointer" />
+          <span className="text-sm text-zinc-400">Use SSL / TLS</span>
+        </label>
+      )}
+      <ErrorBanner msg={formErr} onDismiss={onDismissErr} />
+      <div className="flex gap-2.5 pt-1">
+        <button type="submit" disabled={saving} className={btnPrim}>{saving ? 'Saving…' : submitLabel}</button>
+        <button type="button" onClick={onCancel} className={btnSec}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 // ── Connections Tab ───────────────────────────────────────────────────────────
 function ConnectionsTab() {
   const [connections, setConnections] = useState([]);
@@ -561,12 +638,6 @@ function ConnectionsTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  const isSQLite = t => t === 'sqlite';
-  const handleTypeChange = (type) => {
-    const defaults = { mysql: '3306', mariadb: '3306', postgres: '5432', sqlite: '' };
-    setForm(p => ({ ...p, type, port: defaults[type] || '' }));
-  };
 
   const handleAdd = async (e) => {
     e.preventDefault(); setSaving(true); setFormErr('');
@@ -599,62 +670,6 @@ function ConnectionsTab() {
     finally { setTesting(null); }
   };
 
-  const ConnForm = ({ values, onChange, onSubmit, submitLabel }) => (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div>
-        <label className={label}>Connection name</label>
-        <input className={input} value={values.name} onChange={e => onChange('name', e.target.value)} placeholder="My Database" required />
-      </div>
-      <div>
-        <label className={label}>Type</label>
-        <select className={select} value={values.type}
-          onChange={e => { onChange('type', e.target.value); if (submitLabel === 'Create') handleTypeChange(e.target.value); }}>
-          {DB_TYPES.map(t => <option key={t} value={t}>{DB_LABEL[t]}</option>)}
-        </select>
-      </div>
-      {!isSQLite(values.type) && (
-        <>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className={label}>Host</label>
-              <input className={input} value={values.host} onChange={e => onChange('host', e.target.value)} placeholder="localhost" />
-            </div>
-            <div>
-              <label className={label}>Port</label>
-              <input className={input} value={values.port} onChange={e => onChange('port', e.target.value)} placeholder="3306" />
-            </div>
-          </div>
-          <div>
-            <label className={label}>Username</label>
-            <input className={input} value={values.username} onChange={e => onChange('username', e.target.value)} placeholder="root" />
-          </div>
-          <div>
-            <label className={label}>Password{submitLabel !== 'Create' && <span className="text-zinc-700 font-normal ml-1">(blank = unchanged)</span>}</label>
-            <input type="password" className={input} value={values.password} onChange={e => onChange('password', e.target.value)}
-              placeholder={submitLabel !== 'Create' ? 'Unchanged' : 'password'} />
-          </div>
-        </>
-      )}
-      <div>
-        <label className={label}>{isSQLite(values.type) ? 'File path' : 'Database name'}</label>
-        <input className={input} value={values.database} onChange={e => onChange('database', e.target.value)}
-          placeholder={isSQLite(values.type) ? '/data/mydb.sqlite' : 'mydb'} required />
-      </div>
-      {!isSQLite(values.type) && (
-        <label className="flex items-center gap-2.5 cursor-pointer select-none">
-          <input type="checkbox" checked={values.use_ssl || false} onChange={e => onChange('use_ssl', e.target.checked)}
-            className="w-4 h-4 rounded border border-white/[0.12] bg-[#0d0d10] accent-violet-500 cursor-pointer" />
-          <span className="text-sm text-zinc-400">Use SSL / TLS</span>
-        </label>
-      )}
-      <ErrorBanner msg={formErr} onDismiss={() => setFormErr('')} />
-      <div className="flex gap-2.5 pt-1">
-        <button type="submit" disabled={saving} className={btnPrim}>{saving ? 'Saving…' : submitLabel}</button>
-        <button type="button" onClick={() => { setShowAdd(false); setEditConn(null); }} className={btnSec}>Cancel</button>
-      </div>
-    </form>
-  );
-
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
@@ -676,7 +691,7 @@ function ConnectionsTab() {
           <span className="w-4 h-4 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />Loading…
         </div>
       ) : connections.length === 0 && !showAdd ? (
-        <div className="text-center py-16 bg-[#111113] border border-white/[0.07] rounded-2xl">
+        <div className="text-center py-16 bg-surface border border-zinc-800 rounded-2xl">
           <p className="text-zinc-400 text-sm font-medium mb-1">No connections yet</p>
           <p className="text-zinc-600 text-xs">Add a connection and grant members access to it.</p>
         </div>
@@ -685,7 +700,7 @@ function ConnectionsTab() {
           {connections.map(conn => {
             const dotColor = DB_COLOR[conn.type] || '#71717a';
             return (
-              <div key={conn.id} className="bg-[#111113] border border-white/[0.07] rounded-2xl overflow-hidden">
+              <div key={conn.id} className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-4 px-5 py-4">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: `${dotColor}18`, border: `1px solid ${dotColor}30` }}>
@@ -694,7 +709,7 @@ function ConnectionsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-zinc-100 text-sm font-medium truncate">{conn.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-white/[0.05] text-zinc-500 rounded-md border border-white/[0.07] uppercase tracking-wide font-medium shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 bg-white/[0.09] text-zinc-500 rounded-md border border-zinc-800 uppercase tracking-wide font-medium shrink-0">
                         {DB_LABEL[conn.type] || conn.type}
                       </span>
                       {conn.grant_count > 0 && (
@@ -712,19 +727,19 @@ function ConnectionsTab() {
                   )}
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => setGrantsConn(grantsConn?.id === conn.id ? null : conn)}
-                      className={`text-xs px-2.5 py-1 border rounded-lg font-medium transition-all ${grantsConn?.id === conn.id ? 'bg-violet-500/12 text-violet-300 border-violet-500/25' : 'bg-[#1c1c1f] text-zinc-400 hover:text-zinc-200 border-white/[0.08] hover:bg-[#232329]'}`}>Grants</button>
+                      className={`text-xs px-2.5 py-1 border rounded-lg font-medium transition-all ${grantsConn?.id === conn.id ? 'bg-violet-500/12 text-violet-300 border-violet-500/25' : 'bg-raised text-zinc-400 hover:text-zinc-200 border-zinc-800 hover:bg-overlay'}`}>Grants</button>
                     <button onClick={() => handleTest(conn.id)} disabled={testing === conn.id}
-                      className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all disabled:opacity-50">
+                      className="text-xs px-2.5 py-1 bg-raised hover:bg-overlay text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-medium transition-all disabled:opacity-50">
                       {testing === conn.id ? 'Testing…' : 'Test'}
                     </button>
                     <button onClick={() => { setEditConn({ id: conn.id, name: conn.name, type: conn.type, host: conn.host || '', port: conn.port ? String(conn.port) : '', username: conn.db_username || '', password: '', database: conn.database_name, use_ssl: conn.use_ssl ?? false }); setFormErr(''); }}
-                      className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-[#232329] text-zinc-400 hover:text-zinc-200 border border-white/[0.08] rounded-lg font-medium transition-all">Edit</button>
+                      className="text-xs px-2.5 py-1 bg-raised hover:bg-overlay text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-medium transition-all">Edit</button>
                     <button onClick={() => handleDelete(conn.id)}
-                      className="text-xs px-2.5 py-1 bg-[#1c1c1f] hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-white/[0.08] hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
+                      className="text-xs px-2.5 py-1 bg-raised hover:bg-red-500/10 text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/20 rounded-lg font-medium transition-all">Delete</button>
                   </div>
                 </div>
                 {grantsConn?.id === conn.id && (
-                  <div className="border-t border-white/[0.06] px-5 pb-4">
+                  <div className="border-t border-zinc-700/80 px-5 pb-4">
                     <GrantsPanel conn={conn} onClose={() => setGrantsConn(null)} />
                   </div>
                 )}
@@ -736,12 +751,30 @@ function ConnectionsTab() {
 
       {showAdd && (
         <Modal title="New connection" onClose={() => setShowAdd(false)}>
-          <ConnForm values={form} onChange={(k, v) => setForm(p => ({ ...p, [k]: v }))} onSubmit={handleAdd} submitLabel="Create" />
+          <ConnForm
+            values={form}
+            onChange={(k, v) => setForm(p => ({ ...p, [k]: v }))}
+            onSubmit={handleAdd}
+            submitLabel="Create"
+            formErr={formErr}
+            onDismissErr={() => setFormErr('')}
+            saving={saving}
+            onCancel={() => { setShowAdd(false); setFormErr(''); }}
+          />
         </Modal>
       )}
       {editConn && (
         <Modal title="Edit connection" onClose={() => setEditConn(null)}>
-          <ConnForm values={editConn} onChange={(k, v) => setEditConn(p => ({ ...p, [k]: v }))} onSubmit={handleEdit} submitLabel="Save changes" />
+          <ConnForm
+            values={editConn}
+            onChange={(k, v) => setEditConn(p => ({ ...p, [k]: v }))}
+            onSubmit={handleEdit}
+            submitLabel="Save changes"
+            formErr={formErr}
+            onDismissErr={() => setFormErr('')}
+            saving={saving}
+            onCancel={() => { setEditConn(null); setFormErr(''); }}
+          />
         </Modal>
       )}
     </div>
@@ -753,17 +786,17 @@ export default function AdminPanel({ user, onClose, onLogout }) {
   const [tab, setTab] = useState('users');
 
   return (
-    <div className="min-h-full bg-[#09090b] flex flex-col">
-      <nav className="h-12 bg-[#111113] border-b border-white/[0.07] flex items-center justify-between px-5 shrink-0">
+    <div className="min-h-full bg-base flex flex-col">
+      <nav className="h-12 bg-surface border-b border-zinc-800 flex items-center justify-between px-5 shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1.5 transition-all hover:bg-white/[0.05] px-2 py-1.5 rounded-lg">
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1.5 transition-all hover:bg-zinc-800/15 px-2 py-1.5 rounded-lg">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M8.5 3L4.5 7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             Back
           </button>
-          <span className="w-px h-4 bg-white/[0.07]" />
-          <span className="text-zinc-200 text-sm font-semibold">{user.tenant_name || 'Workspace'} — Admin</span>
+          <span className="w-px h-4 bg-white/[0.12]" />
+          <span className="text-zinc-200 text-sm font-semibold">{user.org_name || 'Organization'} — Admin</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-xs text-zinc-600 font-mono mr-2 select-none">{user.username}</span>
@@ -779,7 +812,7 @@ export default function AdminPanel({ user, onClose, onLogout }) {
 
         <TenantInfoBar />
 
-        <div className="flex gap-1 mb-7 border-b border-white/[0.07]">
+        <div className="flex gap-1 mb-7 border-b border-zinc-800">
           {[['users', 'Members'], ['invites', 'Invites'], ['connections', 'Connections']].map(([key, lbl]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-all ${tab === key ? 'border-violet-500 text-violet-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>

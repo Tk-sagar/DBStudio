@@ -28,8 +28,8 @@ function safeQuery(q, currentUserId) {
 router.get('/queries/:id', requireDbAuth, requirePerm('full'), async (req, res) => {
   try {
     const userId   = req.session.user.id;
-    const tenantId = req.session.user.tenant_id;
-    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId })
+    const tenantId = req.session.user.org_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, org_id: tenantId })
       .populate('created_by', 'username')
       .populate('shared_with', 'username')
       .lean();
@@ -50,7 +50,7 @@ router.get('/queries', requireDbAuth, async (req, res) => {
   try {
     const userId   = req.session.user.id;
     const connId   = req.session.activeConnId || null;
-    const tenantId = req.session.user.tenant_id;
+    const tenantId = req.session.user.org_id;
 
     const connScope = connId
       ? { connection_id: connId }
@@ -58,7 +58,7 @@ router.get('/queries', requireDbAuth, async (req, res) => {
 
     const queries = await SavedQuery.find({
       $and: [
-        { tenant_id: tenantId },
+        { org_id: tenantId },
         { $or: [{ created_by: userId }, { shared_with: userId }, { is_public: true }] },
         ...(Object.keys(connScope).length ? [connScope] : []),
       ],
@@ -87,7 +87,7 @@ router.post('/queries', requireDbAuth, async (req, res) => {
       description:   description?.trim() || '',
       sql:           sql.trim(),
       created_by:    req.session.user.id,
-      tenant_id:     req.session.user.tenant_id,
+      org_id:     req.session.user.org_id,
       connection_id: req.session.activeConnId || null,
     });
 
@@ -101,10 +101,10 @@ router.post('/queries', requireDbAuth, async (req, res) => {
 router.put('/queries/:id', requireDbAuth, async (req, res) => {
   try {
     const userId   = req.session.user.id;
-    const tenantId = req.session.user.tenant_id;
-    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
+    const tenantId = req.session.user.org_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, org_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'org_admin') {
       return res.status(403).json({ error: 'Only the owner can edit this query.' });
     }
 
@@ -128,10 +128,10 @@ router.put('/queries/:id', requireDbAuth, async (req, res) => {
 router.delete('/queries/:id', requireDbAuth, async (req, res) => {
   try {
     const userId   = req.session.user.id;
-    const tenantId = req.session.user.tenant_id;
-    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
+    const tenantId = req.session.user.org_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, org_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'org_admin') {
       return res.status(403).json({ error: 'Only the owner can delete this query.' });
     }
     await SavedQuery.findByIdAndDelete(req.params.id);
@@ -145,8 +145,8 @@ router.delete('/queries/:id', requireDbAuth, async (req, res) => {
 router.post('/queries/:id/run', requireDbAuth, async (req, res) => {
   try {
     const userId   = req.session.user.id;
-    const tenantId = req.session.user.tenant_id;
-    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
+    const tenantId = req.session.user.org_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, org_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
 
     const isOwner  = q.created_by.toString() === userId;
@@ -164,10 +164,10 @@ router.post('/queries/:id/run', requireDbAuth, async (req, res) => {
 router.put('/queries/:id/share', requireDbAuth, async (req, res) => {
   try {
     const userId   = req.session.user.id;
-    const tenantId = req.session.user.tenant_id;
-    const q = await SavedQuery.findOne({ _id: req.params.id, tenant_id: tenantId }).lean();
+    const tenantId = req.session.user.org_id;
+    const q = await SavedQuery.findOne({ _id: req.params.id, org_id: tenantId }).lean();
     if (!q) return res.status(404).json({ error: 'Query not found.' });
-    if (q.created_by.toString() !== userId && req.session.user.role !== 'tenant_admin') {
+    if (q.created_by.toString() !== userId && req.session.user.role !== 'org_admin') {
       return res.status(403).json({ error: 'Only the owner can change sharing settings.' });
     }
 
@@ -176,7 +176,7 @@ router.put('/queries/:id/share', requireDbAuth, async (req, res) => {
     if (Array.isArray(usernames) && usernames.length > 0) {
       const cleanNames = [...new Set(usernames.map(u => u.trim()).filter(Boolean))];
       const users = await User.find(
-        { username: { $in: cleanNames }, tenant_id: tenantId },
+        { username: { $in: cleanNames }, org_id: tenantId },
         '_id username'
       ).lean();
       sharedWithIds = users.filter(u => u._id.toString() !== userId).map(u => u._id);

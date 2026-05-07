@@ -4,17 +4,18 @@ import AdminPanel        from './pages/AdminPanel.jsx';
 import SuperAdminPanel   from './pages/SuperAdminPanel.jsx';
 import Dashboard         from './pages/Dashboard.jsx';
 import ConnectionPicker  from './components/ConnectionPicker.jsx';
+import { ThemeProvider } from './hooks/useTheme.jsx';
 import api from './api/client.js';
 
 function Spinner() {
   return (
-    <div className="flex items-center justify-center h-full bg-[#09090b]">
+    <div className="flex items-center justify-center h-full bg-base">
       <span className="w-5 h-5 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin-fast" />
     </div>
   );
 }
 
-export default function App({ initialData }) {
+function AppInner({ initialData }) {
   const [loading,         setLoading]         = useState(!initialData);
   const [needsSetup,      setNeedsSetup]      = useState(initialData?.needsSetup   ?? false);
   const [user,            setUser]            = useState(initialData?.user         ?? null);
@@ -161,7 +162,7 @@ export default function App({ initialData }) {
     return <SuperAdminPanel user={user} onLogout={handleLogout} />;
   }
 
-  if (showAdmin && user.role === 'tenant_admin') {
+  if (showAdmin && user.role === 'org_admin') {
     return <AdminPanel user={user} onClose={() => setShowAdmin(false)} onLogout={handleLogout} />;
   }
 
@@ -170,7 +171,7 @@ export default function App({ initialData }) {
       <ConnectionPicker
         user={user}
         onConnect={handleConnect}
-        onAdmin={user.role === 'tenant_admin' ? () => setShowAdmin(true) : undefined}
+        onAdmin={user.role === 'org_admin' ? () => setShowAdmin(true) : undefined}
         onLogout={handleLogout}
       />
     );
@@ -188,7 +189,7 @@ export default function App({ initialData }) {
         connectingId={connectingId}
         onDisconnect={handleDisconnect}
         onLogout={handleLogout}
-        onAdmin={user.role === 'tenant_admin' ? () => setShowAdmin(true) : undefined}
+        onAdmin={user.role === 'org_admin' ? () => setShowAdmin(true) : undefined}
         onSwitchConnection={handleSwitchConnection}
         onCloseConnection={handleCloseConnection}
         onAddConnection={() => setShowPicker(true)}
@@ -201,7 +202,7 @@ export default function App({ initialData }) {
             <ConnectionPicker
               user={user}
               onConnect={handleConnect}
-              onAdmin={user.role === 'tenant_admin' ? () => { setShowPicker(false); setShowAdmin(true); } : undefined}
+              onAdmin={user.role === 'org_admin' ? () => { setShowPicker(false); setShowAdmin(true); } : undefined}
               onLogout={handleLogout}
               onClose={() => setShowPicker(false)}
             />
@@ -209,5 +210,13 @@ export default function App({ initialData }) {
         </div>
       )}
     </>
+  );
+}
+
+export default function App({ initialData }) {
+  return (
+    <ThemeProvider>
+      <AppInner initialData={initialData} />
+    </ThemeProvider>
   );
 }
