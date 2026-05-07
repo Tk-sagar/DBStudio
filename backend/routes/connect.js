@@ -42,8 +42,8 @@ router.post('/connect', requireAdmin, async (req, res) => {
 
     res.json({ success: true, connId: DIRECT_ID, dbInfo, dbPermission: 'full', tables });
   } catch (err) {
-    console.error('[connect]', err.message);
-    res.status(503).json({ error: 'Connection failed. Check your credentials and try again.' });
+    console.error('[connect]', err.message, err.code);
+    res.status(503).json({ error: `Connection failed: ${err.message}` });
   }
 });
 
